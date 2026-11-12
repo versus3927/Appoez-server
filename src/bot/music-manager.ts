@@ -1,106 +1,286 @@
 import {
-  AudioPlayerStatus, NoSubscriberBehavior, StreamType, VoiceConnectionStatus,
-  createAudioPlayer, createAudioResource, entersState, joinVoiceChannel,
-  type AudioPlayer, type VoiceConnection,
+  AudioPlayerStatus,
+  NoSubscriberBehavior,
+  StreamType,
+  VoiceConnectionStatus,
+  createAudioPlayer,
+  createAudioResource,
+  entersState,
+  joinVoiceChannel,
+  type AudioPlayer,
+  type VoiceConnection,
 } from '@discordjs/voice';
-import type { ChatInputCommandInteraction, GuildTextBasedChannel, GuildMember } from 'discord.js';
+import type { ChatInputCommandInteraction, Guild, GuildTextBasedChannel, GuildMember } from 'discord.js';
+import { client as primaryClient } from './client';
+import {
+  acquireFreeMusicAgent,
+  getMusicAgents,
+  markMusicAgentVoice,
+  releaseMusicAgent,
+  type MusicBotAgent,
+} from './music-bot-pool';
 import { createRequire } from 'module';
 
 const req = createRequire(import.meta.url);
 const SoundCloud = req('soundcloud-scraper');
 const scClient = new SoundCloud.Client();
 
-export type MusicTrack = { title: string; url: string; duration: string; thumbnail: string | null; author: string; requestedBy: string };
-type State = { guildId: string; voiceChannelId: string; textChannel: GuildTextBasedChannel; connection: VoiceConnection; player: AudioPlayer; queue: MusicTrack[]; current: MusicTrack | null };
+export type MusicTrack = {
+  title: string;
+  url: string;
+  duration: string;
+  thumbnail: string | null;
+  author: string;
+  requestedBy: string;
+};
 
-// Key = guildId:voiceChannelId — allows different songs in different voice channels
+type State = {
+  key: string;
+  guildId: string;
+  voiceChannelId: string;
+  textChannel: GuildTextBasedChannel;
+  guildForVoice: Guild;
+  connection: VoiceConnection;
+  player: AudioPlayer;
+  queue: MusicTrack[];
+  current: MusicTrack | null;
+  agentUserId: string | null;
+  agentTag: string;
+};
+
 const states = new Map<string, State>();
 
-function stateKey(gid: string, vcId: string) { return `${gid}:${vcId}`; }
-function fmt(ms: number) { const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const sec = s % 60; return `${m}:${String(sec).padStart(2, '0')}`; }
+function stateKey(guildId: string, voiceChannelId: string) {
+  return `${guildId}:${voiceChannelId}`;
+}
+
+function fmt(ms: number) {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
 
 async function resolveTrack(query: string, requestedBy: string): Promise<MusicTrack> {
   const input = query.trim();
 
-  // If it's a SoundCloud URL — resolve directly
-  if (/soundcloud\.com\//.test(input)) {
+  if (/soundcloud\.com\//i.test(input)) {
     const info = await scClient.getSongInfo(input);
-    return { title: info.title, url: info.url, duration: fmt(info.duration), thumbnail: info.thumbnail || null, author: info.author?.name || 'SoundCloud', requestedBy };
+    return {
+      title: info.title,
+      url: info.url,
+      duration: fmt(info.duration),
+      thumbnail: info.thumbnail || null,
+      author: info.author?.name || 'SoundCloud',
+      requestedBy,
+    };
   }
 
-  // Search SoundCloud
   const results = await scClient.search(input, 'track');
-  if (!results || results.length === 0) throw new Error('Ничего не найдено на SoundCloud');
+  if (!results?.length) throw new Error('Ничего не найдено на SoundCloud');
 
-  // Filter: max 6 minutes (360 seconds = 360000ms)
   const MAX_MS = 6 * 60 * 1000;
-  
-  for (const r of results.slice(0, 10)) {
+  for (const result of results.slice(0, 10)) {
     try {
-      const info = await scClient.getSongInfo(r.url);
+      const info = await scClient.getSongInfo(result.url);
       if (info.duration <= MAX_MS) {
-        return { title: info.title, url: info.url, duration: fmt(info.duration), thumbnail: info.thumbnail || null, author: info.author?.name || 'SoundCloud', requestedBy };
+        return {
+          title: info.title,
+          url: info.url,
+          duration: fmt(info.duration),
+          thumbnail: info.thumbnail || null,
+          author: info.author?.name || 'SoundCloud',
+          requestedBy,
+        };
       }
-    } catch { /* try next */ }
+    } catch {
+      // try next result
+    }
   }
 
-  // If nothing under 6min, take first result anyway
-  const info = await scClient.getSongInfo(results[0].url);
-  return { title: info.title, url: info.url, duration: fmt(info.duration), thumbnail: info.thumbnail || null, author: info.author?.name || 'SoundCloud', requestedBy };
+  throw new Error('На SoundCloud не найдено треков короче 6 минут');
 }
 
-async function send(s: State, c: string) { await s.textChannel.send(c).catch(() => {}); }
+async function send(state: State, content: string) {
+  await state.textChannel.send(content).catch(() => {});
+}
 
-async function playNext(key: string) {
-  const s = states.get(key); if (!s) return;
-  const next = s.queue.shift() ?? null; s.current = next;
+async function playNext(key: string): Promise<void> {
+  const state = states.get(key);
+  if (!state) return;
+
+  const next = state.queue.shift() ?? null;
+  state.current = next;
+
   if (!next) {
-    await send(s, '📭 Очередь закончилась.');
-    setTimeout(() => { const c = states.get(key); if (!c || c.current || c.queue.length > 0) return; c.player.stop(true); c.connection.destroy(); states.delete(key); }, 10_000);
+    await send(state, `📭 Очередь закончилась. Музыкальный бот **${state.agentTag}** освобождён.`);
+    setTimeout(() => {
+      const current = states.get(key);
+      if (!current || current.current || current.queue.length > 0) return;
+      current.player.stop(true);
+      current.connection.destroy();
+      releaseMusicAgent(current.agentUserId);
+      states.delete(key);
+    }, 10_000);
     return;
   }
+
   try {
     const info = await scClient.getSongInfo(next.url);
     const stream = await info.downloadProgressive();
-    const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary, inlineVolume: true });
+    const resource = createAudioResource(stream, {
+      inputType: StreamType.Arbitrary,
+      inlineVolume: true,
+    });
     resource.volume?.setVolume(0.8);
-    s.player.play(resource);
-    await send(s, `▶️ Сейчас играет: **${next.title}** — ${next.duration}`);
-  } catch (e) {
-    console.error('[music] Stream error:', e); await send(s, `❌ Ошибка: ${e instanceof Error ? e.message : e}`);
-    s.current = null; await playNext(key);
+    state.player.play(resource);
+    await send(state, `▶️ Сейчас играет: **${next.title}** — ${next.duration} • Бот: **${state.agentTag}**`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[music] Stream error:', message);
+    await send(state, `❌ Ошибка потока: ${message}`);
+    state.current = null;
+    await playNext(key);
   }
 }
 
+function chooseVoiceGuild(member: GuildMember): { guild: Guild; agent: MusicBotAgent | null } {
+  const agent = acquireFreeMusicAgent(member.guild.id);
+  if (agent) {
+    const agentGuild = agent.client.guilds.cache.get(member.guild.id);
+    if (agentGuild) {
+      return { guild: agentGuild, agent };
+    }
+    releaseMusicAgent(agent.client.user?.id);
+  }
+  return { guild: member.guild, agent: null };
+}
+
 function createState(member: GuildMember, interaction: ChatInputCommandInteraction): State {
-  const vcId = member.voice.channelId!;
-  const key = stateKey(member.guild.id, vcId);
-  const connection = joinVoiceChannel({ channelId: vcId, guildId: member.guild.id, adapterCreator: member.guild.voiceAdapterCreator as any, selfDeaf: true, selfMute: false });
-  const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
-  connection.subscribe(player);
-  const s: State = { guildId: member.guild.id, voiceChannelId: vcId, textChannel: interaction.channel as GuildTextBasedChannel, connection, player, queue: [], current: null };
-  player.on(AudioPlayerStatus.Idle, () => void playNext(key));
-  player.on('error', (e) => { console.error('[music] Player error:', e.message); void send(s, `❌ ${e.message}`); s.current = null; void playNext(key); });
-  connection.on('error', (e) => { console.error('[music] Voice error:', e.message); });
-  connection.on(VoiceConnectionStatus.Disconnected, async () => {
-    try { await Promise.race([entersState(connection, VoiceConnectionStatus.Signalling, 5_000), entersState(connection, VoiceConnectionStatus.Connecting, 5_000)]); }
-    catch { connection.destroy(); states.delete(key); }
+  const voiceChannelId = member.voice.channelId!;
+  const key = stateKey(member.guild.id, voiceChannelId);
+  const { guild: voiceGuild, agent } = chooseVoiceGuild(member);
+
+  const connection = joinVoiceChannel({
+    channelId: voiceChannelId,
+    guildId: voiceGuild.id,
+    adapterCreator: voiceGuild.voiceAdapterCreator as any,
+    selfDeaf: true,
+    selfMute: false,
   });
-  states.set(key, s);
-  return s;
+
+  const player = createAudioPlayer({
+    behaviors: {
+      noSubscriber: NoSubscriberBehavior.Pause,
+    },
+  });
+
+  connection.subscribe(player);
+
+  const state: State = {
+    key,
+    guildId: member.guild.id,
+    voiceChannelId,
+    textChannel: interaction.channel as GuildTextBasedChannel,
+    guildForVoice: voiceGuild,
+    connection,
+    player,
+    queue: [],
+    current: null,
+    agentUserId: agent?.client.user?.id ?? primaryClient.user?.id ?? null,
+    agentTag: agent?.client.user?.tag ?? primaryClient.user?.tag ?? 'Community bot',
+  };
+
+  if (agent?.client.user?.id) {
+    markMusicAgentVoice(agent.client.user.id, member.guild.id, voiceChannelId);
+  }
+
+  player.on(AudioPlayerStatus.Idle, () => {
+    void playNext(key);
+  });
+
+  player.on('error', (error) => {
+    console.error('[music] Player error:', error.message);
+    void send(state, `❌ ${error.message}`);
+    state.current = null;
+    void playNext(key);
+  });
+
+  connection.on('error', (error) => {
+    console.error('[music] Voice error:', error.message);
+  });
+
+  connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    try {
+      await Promise.race([
+        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+      ]);
+    } catch {
+      connection.destroy();
+      releaseMusicAgent(state.agentUserId);
+      states.delete(key);
+    }
+  });
+
+  states.set(key, state);
+  return state;
 }
 
-export async function enqueueMusic(interaction: ChatInputCommandInteraction, member: GuildMember, query: string) {
-  const vcId = member.voice.channelId!;
-  const key = stateKey(interaction.guildId!, vcId);
-  let s = states.get(key);
-  if (!s) { s = createState(member, interaction); await entersState(s.connection, VoiceConnectionStatus.Ready, 20_000); }
+export async function enqueueMusic(
+  interaction: ChatInputCommandInteraction,
+  member: GuildMember,
+  query: string,
+) {
+  const voiceChannelId = member.voice.channelId!;
+  const key = stateKey(interaction.guildId!, voiceChannelId);
+  let state = states.get(key);
+
+  if (!state) {
+    const extraAgents = getMusicAgents();
+    if (extraAgents.length > 0) {
+      const anyFree = extraAgents.some((agent) => !agent.busy && agent.client.guilds.cache.has(member.guild.id));
+      const hasStateInVoice = states.has(key);
+      if (!anyFree && !hasStateInVoice) {
+        throw new Error('Все музыкальные боты сейчас заняты. Попробуй позже.');
+      }
+    }
+
+    state = createState(member, interaction);
+    await entersState(state.connection, VoiceConnectionStatus.Ready, 20_000);
+  }
+
   const track = await resolveTrack(query, interaction.user.username);
-  s.queue.push(track);
-  if (!s.current) await playNext(key);
-  return track;
+  state.queue.push(track);
+
+  if (!state.current) {
+    await playNext(key);
+  }
+
+  return { ...track, agentTag: state.agentTag };
 }
 
-export function skipMusic(guildId: string, vcId: string) { const s = states.get(stateKey(guildId, vcId)); if (!s?.current) return null; const c = s.current; s.player.stop(); return c; }
-export function stopMusic(guildId: string, vcId: string) { const key = stateKey(guildId, vcId); const s = states.get(key); if (!s) return false; s.queue = []; s.current = null; s.player.stop(true); s.connection.destroy(); states.delete(key); return true; }
-export function getMusicQueue(guildId: string, vcId: string) { return states.get(stateKey(guildId, vcId)) ?? null; }
+export function skipMusic(guildId: string, voiceChannelId: string) {
+  const state = states.get(stateKey(guildId, voiceChannelId));
+  if (!state?.current) return null;
+  const current = state.current;
+  state.player.stop();
+  return current;
+}
+
+export function stopMusic(guildId: string, voiceChannelId: string) {
+  const key = stateKey(guildId, voiceChannelId);
+  const state = states.get(key);
+  if (!state) return false;
+  state.queue = [];
+  state.current = null;
+  state.player.stop(true);
+  state.connection.destroy();
+  releaseMusicAgent(state.agentUserId);
+  states.delete(key);
+  return true;
+}
+
+export function getMusicQueue(guildId: string, voiceChannelId: string) {
+  return states.get(stateKey(guildId, voiceChannelId)) ?? null;
+}
