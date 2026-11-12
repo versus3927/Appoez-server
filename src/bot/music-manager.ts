@@ -18,6 +18,9 @@ import {
   markMusicAgentVoice,
   releaseMusicAgent,
   type MusicBotAgent,
+  isChannelOccupied,
+  markChannelFree,
+  markChannelOccupied,
 } from './music-bot-pool';
 import { createRequire } from 'module';
 
@@ -120,6 +123,7 @@ async function playNext(key: string): Promise<void> {
       current.player.stop(true);
       current.connection.destroy();
       releaseMusicAgent(current.agentUserId);
+      markChannelFree(current.guildId, current.voiceChannelId);
       states.delete(key);
     }, 10_000);
     return;
@@ -219,10 +223,12 @@ function createState(member: GuildMember, interaction: ChatInputCommandInteracti
     } catch {
       connection.destroy();
       releaseMusicAgent(state.agentUserId);
+      markChannelFree(state.guildId, state.voiceChannelId);
       states.delete(key);
     }
   });
 
+  markChannelOccupied(member.guild.id, voiceChannelId);
   states.set(key, state);
   return state;
 }
@@ -277,6 +283,7 @@ export function stopMusic(guildId: string, voiceChannelId: string) {
   state.player.stop(true);
   state.connection.destroy();
   releaseMusicAgent(state.agentUserId);
+  markChannelFree(state.guildId, state.voiceChannelId);
   states.delete(key);
   return true;
 }

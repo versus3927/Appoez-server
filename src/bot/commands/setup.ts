@@ -50,7 +50,6 @@ export async function handleSetup(guild: Guild) {
 
   // Interesting
   const mediaChannel = await guild.channels.create({ name: '💞・медиа', type: ChannelType.GuildText, parent: catInteresting.id });
-  await guild.channels.create({ name: '❔・опросы', type: ChannelType.GuildText, parent: catInteresting.id, permissionOverwrites: readOnly() });
   const anonymousChannel = await guild.channels.create({ name: '💗・анонимки', type: ChannelType.GuildText, parent: catInteresting.id, permissionOverwrites: readOnly() });
   try { await guild.channels.create({ name: '💡・идеи', type: ChannelType.GuildForum, parent: catInteresting.id, defaultForumLayout: ForumLayoutType.ListView, availableTags: [{ name: '💡 Идея!', moderated: false }, { name: '❤️ Стикер', moderated: false }, { name: '✅ Выполнено', moderated: true }, { name: '🐛 Баг', moderated: false }] }); } catch { await guild.channels.create({ name: '💡・идеи', type: ChannelType.GuildText, parent: catInteresting.id }); }
 

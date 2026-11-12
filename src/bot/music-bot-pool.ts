@@ -23,6 +23,21 @@ export type MusicBotAgent = {
 const agents: MusicBotAgent[] = [];
 let poolStarted = false;
 
+// Track which voice channels are currently occupied (by any bot including primary)
+const occupiedChannels = new Set<string>();
+
+export function isChannelOccupied(guildId: string, voiceChannelId: string): boolean {
+  return occupiedChannels.has(`${guildId}:${voiceChannelId}`);
+}
+
+export function markChannelOccupied(guildId: string, voiceChannelId: string) {
+  occupiedChannels.add(`${guildId}:${voiceChannelId}`);
+}
+
+export function markChannelFree(guildId: string, voiceChannelId: string) {
+  occupiedChannels.delete(`${guildId}:${voiceChannelId}`);
+}
+
 function maskToken(token: string) {
   return `${token.slice(0, 6)}...${token.slice(-4)}`;
 }

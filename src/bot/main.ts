@@ -4,6 +4,7 @@ import { client } from './client';
 import { startMusicBotPool } from './music-bot-pool';
 import { deployCommands } from './deploy-commands';
 import { handleGuildMemberAdd } from './events/guildMemberAdd';
+import { registerMessageLogs } from './events/messageLogs';
 import { handleInteraction } from './events/interactionCreate';
 import { handleMessageCreate } from './events/messageCreate';
 import { handleVoiceStateUpdate } from './events/voiceStateUpdate';
@@ -28,6 +29,7 @@ export function startBot(): Promise<boolean> {
         void deployCommands().catch((error) =>
           console.error('[bot] Failed to deploy slash commands:', error),
         );
+        registerMessageLogs();
         void startMusicBotPool().catch((error) =>
           console.error('[music-pool] Failed to start extra agents:', error),
         );
