@@ -22,6 +22,7 @@ export type MusicBotAgent = {
 
 const agents: MusicBotAgent[] = [];
 let poolStarted = false;
+let roundRobinIndex = 0;
 
 // Track which voice channels are currently occupied (by any bot including primary)
 const occupiedChannels = new Set<string>();
@@ -55,6 +56,33 @@ function parseTokens(raw: string | undefined): string[] {
     .split(/[\n,;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function freeAgent(agent: MusicBotAgent) {
+  agent.busy = false;
+  agent.currentGuildId = null;
+  agent.currentVoiceChannelId = null;
+}
+
+function healStaleAgentState(agent: MusicBotAgent) {
+  if (!agent.busy) return;
+  if (!agent.currentGuildId || !agent.currentVoiceChannelId) {
+    freeAgent(agent);
+    return;
+  }
+
+  const occupancyKey = `${agent.currentGuildId}:${agent.currentVoiceChannelId}`;
+  const guild = agent.client.guilds.cache.get(agent.currentGuildId);
+  const actualVoiceChannelId = guild?.members.me?.voice.channelId ?? null;
+
+  // If our app no longer marks that voice channel occupied, or the bot is not in that channel anymore,
+  // the agent is stale and should be freed.
+  if (!occupiedChannels.has(occupancyKey) || actualVoiceChannelId !== agent.currentVoiceChannelId) {
+    console.log(
+      `[music-pool] ♻️ Releasing stale agent ${agent.client.user?.tag}: tracked=${agent.currentVoiceChannelId}, actual=${actualVoiceChannelId}`,
+    );
+    freeAgent(agent);
+  }
 }
 
 export async function startMusicBotPool() {
@@ -98,26 +126,40 @@ export function getMusicAgents() {
 }
 
 export function acquireFreeMusicAgent(guildId: string): MusicBotAgent | null {
-  // Don't check guilds.cache — music bots may not have cached the guild yet.
-  // They only need GuildVoiceStates intent to join voice channels.
-  const free = agents.find((agent) => !agent.busy && agent.client.isReady());
-  if (!free) {
-    console.log('[music-pool] No free agent. Status:', agents.map(a => (a.client.user?.tag ?? '?') + '=' + (a.busy ? 'BUSY' : 'FREE')).join(', '));
-    return null;
+  // Heal stale states before allocation
+  for (const agent of agents) {
+    healStaleAgentState(agent);
   }
-  free.busy = true;
-  free.currentGuildId = guildId;
-  console.log(`[music-pool] Acquired agent: ${free.client.user?.tag} for guild ${guildId}`);
-  return free;
+
+  if (agents.length === 0) return null;
+
+  // Round-robin selection so the first bot is not always preferred
+  for (let i = 0; i < agents.length; i += 1) {
+    const index = (roundRobinIndex + i) % agents.length;
+    const agent = agents[index];
+    if (!agent.busy && agent.client.isReady()) {
+      agent.busy = true;
+      agent.currentGuildId = guildId;
+      roundRobinIndex = (index + 1) % agents.length;
+      console.log(`[music-pool] Acquired agent: ${agent.client.user?.tag} for guild ${guildId}`);
+      return agent;
+    }
+  }
+
+  console.log(
+    '[music-pool] No free agent. Status:',
+    agents
+      .map((agent) => `${agent.client.user?.tag ?? '?'}=${agent.busy ? 'BUSY' : 'FREE'}:${agent.currentVoiceChannelId ?? 'none'}`)
+      .join(', '),
+  );
+  return null;
 }
 
 export function releaseMusicAgent(clientUserId: string | null | undefined) {
   if (!clientUserId) return;
   const agent = agents.find((item) => item.client.user?.id === clientUserId);
   if (!agent) return;
-  agent.busy = false;
-  agent.currentGuildId = null;
-  agent.currentVoiceChannelId = null;
+  freeAgent(agent);
 }
 
 export function markMusicAgentVoice(clientUserId: string | null | undefined, guildId: string, voiceChannelId: string) {

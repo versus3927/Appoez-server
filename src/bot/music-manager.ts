@@ -202,6 +202,7 @@ async function createState(member: GuildMember, interaction: ChatInputCommandInt
   const voiceChannelId = member.voice.channelId!;
   const key = stateKey(member.guild.id, voiceChannelId);
   const { guild: voiceGuild, agent } = await chooseVoiceGuild(member);
+  console.log(`[music] Creating state for voice ${voiceChannelId} with ${agent?.client.user?.tag ?? primaryClient.user?.tag ?? 'primary'}`);
 
   const connection = joinVoiceChannel({
     channelId: voiceChannelId,
