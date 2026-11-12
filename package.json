@@ -13,6 +13,7 @@
     "@discord-player/extractor": "^7.2.0",
     "@discordjs/opus": "^0.11.0",
     "@discordjs/voice": "^0.19.2",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@types/ms": "^2.1.0",
     "bufferutil": "^4.2.0",
     "discord-player": "^7.2.0",

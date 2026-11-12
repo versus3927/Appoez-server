@@ -14,6 +14,8 @@ const externalBotPackages = [
     '@discord-player/equalizer',
     'discord-voip',
     'ffmpeg-static',
+    '@ffmpeg-installer/ffmpeg',
+    '@ffmpeg-installer/linux-x64',
     'libsodium-wrappers',
     'zlib-sync',
     'bufferutil',
@@ -22,12 +24,6 @@ const externalBotPackages = [
 
 const nextConfig: NextConfig = {
     serverExternalPackages: externalBotPackages,
-    // Turbopack exclusions — prevents bundling of CJS packages
-    turbopack: {
-        resolveAlias: Object.fromEntries(
-            externalBotPackages.map(pkg => [pkg, { browser: pkg, default: pkg }])
-        ),
-    },
 };
 
 export default nextConfig;

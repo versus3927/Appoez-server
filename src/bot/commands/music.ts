@@ -1,13 +1,13 @@
 import { ChatInputCommandInteraction, GuildMember, EmbedBuilder } from 'discord.js';
+import { GuildQueue, useQueue } from 'discord-player';
 import { player } from '../client';
-import { useQueue } from 'discord-player';
 
 export async function handlePlay(interaction: ChatInputCommandInteraction) {
     const query = interaction.options.getString('query', true);
     const member = interaction.member as GuildMember;
 
     if (!member.voice.channel) {
-        return interaction.reply({ content: '❌ Вы должны быть в голосовом канале!', ephemeral: true });
+        return interaction.reply({ content: '❌ Зайди в голосовой канал сначала!', ephemeral: true });
     }
 
     await interaction.deferReply();
@@ -17,10 +17,10 @@ export async function handlePlay(interaction: ChatInputCommandInteraction) {
             nodeOptions: {
                 metadata: interaction,
                 selfDeaf: true,
+                volume: 80,
                 leaveOnEmpty: true,
-                leaveOnEmptyCooldown: 60_000,
-                leaveOnEnd: true,
-                leaveOnEndCooldown: 120_000,
+                leaveOnEmptyCooldown: 30_000,
+                leaveOnEnd: false, // Don't leave immediately — keep queue alive
             },
             requestedBy: interaction.user,
         });
@@ -48,79 +48,42 @@ export async function handlePlay(interaction: ChatInputCommandInteraction) {
 
 export async function handleSkip(interaction: ChatInputCommandInteraction) {
     const member = interaction.member as GuildMember;
-
-    if (!member.voice.channel) {
-        return interaction.reply({ content: '❌ Вы должны быть в голосовом канале!', ephemeral: true });
-    }
+    if (!member.voice.channel) return interaction.reply({ content: '❌ Зайди в голосовой канал!', ephemeral: true });
 
     const queue = useQueue(interaction.guildId!);
+    if (!queue?.isPlaying()) return interaction.reply({ content: '❌ Сейчас ничего не играет.', ephemeral: true });
 
-    if (!queue || !queue.isPlaying()) {
-        return interaction.reply({ content: '❌ Сейчас ничего не играет.', ephemeral: true });
-    }
-
-    try {
-        const current = queue.currentTrack;
-        queue.node.skip();
-        return interaction.reply(`⏭️ Пропущено: **${current?.title ?? 'трек'}**`);
-    } catch (e) {
-        console.error('[music] Skip error:', e);
-        return interaction.reply({ content: '❌ Ошибка при пропуске трека.', ephemeral: true });
-    }
+    const current = queue.currentTrack;
+    queue.node.skip();
+    return interaction.reply(`⏭️ Пропущено: **${current?.title ?? 'трек'}**`);
 }
 
 export async function handleStop(interaction: ChatInputCommandInteraction) {
-    const member = interaction.member as GuildMember;
-
-    if (!member.voice.channel) {
-        return interaction.reply({ content: '❌ Вы должны быть в голосовом канале!', ephemeral: true });
-    }
-
     const queue = useQueue(interaction.guildId!);
-
-    if (!queue) {
-        return interaction.reply({ content: '❌ Нет активной очереди.', ephemeral: true });
-    }
-
-    try {
-        queue.delete();
-        return interaction.reply('⏹️ Воспроизведение остановлено, очередь очищена.');
-    } catch (e) {
-        console.error('[music] Stop error:', e);
-        return interaction.reply({ content: '❌ Ошибка при остановке.', ephemeral: true });
-    }
+    if (!queue) return interaction.reply({ content: '❌ Нет активной очереди.', ephemeral: true });
+    queue.delete();
+    return interaction.reply('⏹️ Остановлено и очередь очищена.');
 }
 
 export async function handleQueue(interaction: ChatInputCommandInteraction) {
-    const queue = useQueue(interaction.guildId!);
-
-    if (!queue || queue.isEmpty()) {
+    const queue: GuildQueue | null = useQueue(interaction.guildId!);
+    if (!queue || (queue.isEmpty() && !queue.currentTrack)) {
         return interaction.reply({ content: '📭 Очередь пуста.', ephemeral: true });
     }
 
     const current = queue.currentTrack;
     const tracks = queue.tracks.toArray().slice(0, 10);
 
-    const embed = new EmbedBuilder()
-        .setTitle('🎵 Текущая очередь')
-        .setColor(0x8B5CF6);
+    const embed = new EmbedBuilder().setTitle('🎵 Текущая очередь').setColor(0x8B5CF6);
 
     if (current) {
-        embed.addFields({
-            name: '▶️ Сейчас играет',
-            value: `**[${current.title}](${current.url})** — ${current.duration}`,
-        });
+        embed.addFields({ name: '▶️ Сейчас играет', value: `**[${current.title}](${current.url})** — ${current.duration}` });
     }
 
     if (tracks.length > 0) {
-        const list = tracks.map((t, i) => `\`${i + 1}.\` **${t.title}** — ${t.duration}`).join('\n');
-        embed.addFields({ name: 'Далее в очереди', value: list });
+        embed.addFields({ name: 'Далее', value: tracks.map((t, i) => `\`${i + 1}.\` **${t.title}** — ${t.duration}`).join('\n') });
     }
 
-    const totalSize = queue.tracks.size;
-    if (totalSize > 10) {
-        embed.setFooter({ text: `...и ещё ${totalSize - 10} треков` });
-    }
-
+    if (queue.tracks.size > 10) embed.setFooter({ text: `...и ещё ${queue.tracks.size - 10} треков` });
     return interaction.reply({ embeds: [embed] });
 }
