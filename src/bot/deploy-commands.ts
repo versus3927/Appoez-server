@@ -33,6 +33,18 @@ const commands = [
     new SlashCommandBuilder()
         .setName('очередь')
         .setDescription('Показать текущую очередь'),
+    // ── NEW FUN COMMANDS ──
+    new SlashCommandBuilder()
+        .setName('ролл')
+        .setDescription('Бросить кубик (случайное число от 1 до 100)'),
+    new SlashCommandBuilder()
+        .setName('шар')
+        .setDescription('Магический шар ответит на твой вопрос')
+        .addStringOption(option => option.setName('question').setDescription('Твой вопрос').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('аватар')
+        .setDescription('Показать аватарку пользователя')
+        .addUserOption(option => option.setName('user').setDescription('Пользователь').setRequired(false)),
 ].map(command => command.toJSON());
 
 export async function deployCommands() {

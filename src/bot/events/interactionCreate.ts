@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import { handleMute, handleDelete, handleStats } from '../commands/handlers';
 import { handleSetup } from '../commands/setup';
 import { handlePlay, handleSkip, handleStop, handleQueue } from '../commands/music';
+import { handleRoll, handle8Ball, handleAvatar } from '../commands/fun';
 
 export async function handleInteraction(interaction: Interaction) {
     // ── Slash Commands ──
@@ -46,6 +47,12 @@ export async function handleInteraction(interaction: Interaction) {
             await handleStop(interaction);
         } else if (commandName === 'очередь') {
             await handleQueue(interaction);
+        } else if (commandName === 'ролл') {
+            await handleRoll(interaction);
+        } else if (commandName === 'шар') {
+            await handle8Ball(interaction);
+        } else if (commandName === 'аватар') {
+            await handleAvatar(interaction);
         }
     }
 
@@ -231,7 +238,6 @@ export async function handleInteraction(interaction: Interaction) {
             try {
                 const channel = guild?.channels.cache.get(channelId!) as any;
                 await channel?.permissionOverwrites.edit(targetId, { Connect: false, ViewChannel: false });
-                // Kick them if they're in the channel
                 const targetMember = channel?.members?.get(targetId);
                 if (targetMember) await targetMember.voice.disconnect();
                 return interaction.reply({ content: `🚫 Пользователь <@${targetId}> забанен в комнате.`, ephemeral: true });

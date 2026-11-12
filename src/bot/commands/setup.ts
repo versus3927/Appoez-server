@@ -187,12 +187,7 @@ export async function handleSetup(guild: Guild) {
         ],
     });
 
-    // ── 🎁 Гивэвэи ──
-    await guild.channels.create({
-        name: '🎁・гивэвэи',
-        type: ChannelType.GuildText,
-        parent: category.id,
-    });
+
 
     // ── 📸 Медиа ──
     await guild.channels.create({
