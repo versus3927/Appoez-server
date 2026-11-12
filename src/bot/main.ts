@@ -1,4 +1,5 @@
 import { Events } from 'discord.js';
+import { ensureTables } from './ensure-tables';
 import { client } from './client';
 import { startMusicBotPool } from './music-bot-pool';
 import { deployCommands } from './deploy-commands';
@@ -23,6 +24,7 @@ export function startBot(): Promise<boolean> {
     try {
       client.once(Events.ClientReady, (readyClient) => {
         console.log(`[bot] ✅ Logged in as ${readyClient.user.tag}`);
+        void ensureTables().catch((e) => console.error('[db] ensureTables error:', e));
         void deployCommands().catch((error) =>
           console.error('[bot] Failed to deploy slash commands:', error),
         );

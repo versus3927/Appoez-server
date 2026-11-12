@@ -98,23 +98,34 @@ export async function handleInteraction(interaction: Interaction) {
     if (!customId.startsWith('room_')) return;
     if (!guild || !channelId || !member) return;
 
+    // Find user's private room by their current voice channel OR by checking all cached rooms
+    const guildMember = await guild.members.fetch(member.user.id).catch(() => null);
+    const userVoiceChannelId = guildMember?.voice?.channelId;
+    
     let room = null;
-    try {
-      room = await db.query.privateRooms.findFirst({
-        where: eq(privateRooms.channelId, channelId),
-      });
-    } catch {
-      room = getPrivateRoom(channelId);
+    let voiceChannel: any = null;
+    
+    // Try to find room by user's current voice channel
+    if (userVoiceChannelId) {
+      try { room = await db.query.privateRooms.findFirst({ where: eq(privateRooms.channelId, userVoiceChannelId) }); } catch {}
+      if (!room) room = getPrivateRoom(userVoiceChannelId);
+      if (room) voiceChannel = guild.channels.cache.get(userVoiceChannelId);
     }
-    if (!room) room = getPrivateRoom(channelId);
+    
+    // Also try the interaction channel (if user is IN the voice channel and clicks button there)
+    if (!room) {
+      try { room = await db.query.privateRooms.findFirst({ where: eq(privateRooms.channelId, channelId) }); } catch {}
+      if (!room) room = getPrivateRoom(channelId);
+      if (room) voiceChannel = guild.channels.cache.get(channelId);
+    }
 
     if (!room || room.ownerId !== member.user.id) {
-      return interaction.reply({ content: '❌ Вы не владелец этой комнаты!', ephemeral: true });
+      return interaction.reply({ content: '❌ Вы не владелец этой комнаты! Зайдите в свою комнату и попробуйте снова.', ephemeral: true });
     }
 
-    const channel = guild.channels.cache.get(channelId) as any;
+    const channel = voiceChannel;
     if (!channel || channel.type !== ChannelType.GuildVoice) {
-      return interaction.reply({ content: '❌ Канал не найден.', ephemeral: true });
+      return interaction.reply({ content: '❌ Голосовой канал не найден.', ephemeral: true });
     }
 
     switch (customId) {
@@ -203,16 +214,26 @@ export async function handleInteraction(interaction: Interaction) {
     const { customId, guild, channelId } = interaction;
 
     if (customId === 'modal_anon_send') {
-      let targetLabel = interaction.fields.getTextInputValue('anon_target');
+      let targetInput = interaction.fields.getTextInputValue('anon_target').trim();
       const message = interaction.fields.getTextInputValue('anon_message');
       
-      // If user typed ID or name, try to resolve it to ping them properly
-      if (/^\d{17,20}$/.test(targetLabel)) {
-          targetLabel = `<@${targetLabel}>`;
+      // Resolve user: try ID, mention, or search by username
+      let resolvedMention = targetInput;
+      if (/^\d{17,20}$/.test(targetInput)) {
+        resolvedMention = `<@${targetInput}>`;
+      } else if (!targetInput.startsWith('<@')) {
+        // Try to find user by username on the server
+        try {
+          const members = await interaction.guild!.members.fetch({ query: targetInput, limit: 1 });
+          const found = members.first();
+          if (found) {
+            resolvedMention = `<@${found.id}>`;
+          }
+        } catch { /* keep as text */ }
       }
 
       try {
-        await postAnonymousMessage(interaction.guild, targetLabel, message);
+        await postAnonymousMessage(interaction.guild, resolvedMention, message);
         return interaction.reply({ content: '✅ Анонимка отправлена.', ephemeral: true });
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
