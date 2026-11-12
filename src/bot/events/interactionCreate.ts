@@ -38,7 +38,7 @@ export async function handleInteraction(interaction: Interaction) {
             await handleDelete(interaction);
         } else if (commandName === 'стата') {
             await handleStats(interaction);
-        } else if (commandName === 'плей') {
+        } else if (commandName === 'музыка') {
             await handlePlay(interaction);
         } else if (commandName === 'скип') {
             await handleSkip(interaction);

@@ -3,6 +3,7 @@ import { client, player } from './client';
 import { handleInteraction } from './events/interactionCreate';
 import { handleVoiceStateUpdate } from './events/voiceStateUpdate';
 import { handleMessageCreate } from './events/messageCreate';
+import { handleGuildMemberAdd } from './events/guildMemberAdd';
 import { deployCommands } from './deploy-commands';
 import { DefaultExtractors } from '@discord-player/extractor';
 
@@ -16,10 +17,6 @@ function getTextChannel(interaction: ChatInputCommandInteraction | undefined): T
     return null;
 }
 
-/**
- * Idempotent bot bootstrap. Safe to call multiple times — the login flow
- * runs only once per process.
- */
 export function startBot(): Promise<boolean> {
     if (startPromise) return startPromise;
 
@@ -32,11 +29,10 @@ export function startBot(): Promise<boolean> {
         }
 
         try {
-            // Load music extractors (YouTube, SoundCloud, etc.)
             await player.extractors.loadMulti(DefaultExtractors);
             console.log('[bot] Music extractors loaded.');
 
-            // ── Player Events (critical for music playback) ──
+            // ── Player Events ──
             player.events.on('playerStart', (queue, track) => {
                 console.log(`[player] ▶️ Now playing: ${track.title}`);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
@@ -48,7 +44,7 @@ export function startBot(): Promise<boolean> {
             });
 
             player.events.on('emptyQueue', (queue) => {
-                console.log('[player] 📭 Queue empty, leaving channel.');
+                console.log('[player] 📭 Queue empty.');
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
                 ch?.send('📭 Очередь закончилась.').catch(() => {});
             });
@@ -58,17 +54,17 @@ export function startBot(): Promise<boolean> {
             });
 
             player.events.on('disconnect', () => {
-                console.log('[player] 🔌 Disconnected from voice.');
+                console.log('[player] 🔌 Disconnected.');
             });
 
             player.events.on('error', (queue, error) => {
-                console.error(`[player] ❌ Queue error:`, error);
+                console.error('[player] ❌ Queue error:', error);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
-                ch?.send(`❌ Ошибка воспроизведения: ${error.message}`).catch(() => {});
+                ch?.send(`❌ Ошибка: ${error.message}`).catch(() => {});
             });
 
             player.events.on('playerError', (queue, error, track) => {
-                console.error(`[player] ❌ Player error on "${track.title}":`, error);
+                console.error(`[player] ❌ Error on "${track.title}":`, error);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
                 ch?.send(`❌ Ошибка при воспроизведении **${track.title}**: ${error.message}`).catch(() => {});
             });
@@ -96,6 +92,11 @@ export function startBot(): Promise<boolean> {
                     console.error('[bot] messageCreate error:', error)
                 )
             );
+            client.on(Events.GuildMemberAdd, (member) =>
+                void handleGuildMemberAdd(member).catch((error) =>
+                    console.error('[bot] guildMemberAdd error:', error)
+                )
+            );
 
             await client.login(token);
             return true;
@@ -109,7 +110,6 @@ export function startBot(): Promise<boolean> {
     return startPromise;
 }
 
-/** True once a startup attempt has been triggered in this process. */
 export function isBotStartupTriggered(): boolean {
     return startPromise !== null;
 }

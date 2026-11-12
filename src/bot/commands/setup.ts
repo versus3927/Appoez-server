@@ -15,47 +15,139 @@ import { guildConfigs } from '@/db/schema';
 export async function handleSetup(guild: Guild) {
     const botId = guild.client.user!.id;
 
-    // ── 1. Roles ──
-    const roleDefs = [
-        { name: '👑 Король', color: '#FFD700' as ColorResolvable, permissions: [PermissionFlagsBits.Administrator] },
-        { name: '⚔️ Почти Король', color: '#4169E1' as ColorResolvable, permissions: [PermissionFlagsBits.ManageMessages] },
-        { name: '🧟 Гуль', color: '#DC143C' as ColorResolvable, permissions: [] as bigint[] },
-        { name: '🐸 Пупоез', color: '#2ECC71' as ColorResolvable, permissions: [] as bigint[] },
+    // ══════════════════════════════════════════
+    //  1. ROLES
+    // ══════════════════════════════════════════
+
+    // Staff roles
+    const staffRoles = [
+        {
+            name: '👑 Король',
+            color: '#FFD700' as ColorResolvable,
+            permissions: [PermissionFlagsBits.Administrator],
+            hoist: true,
+        },
+        {
+            name: '⚔️ Почти Король',
+            color: '#4169E1' as ColorResolvable,
+            permissions: [
+                PermissionFlagsBits.ManageChannels,
+                PermissionFlagsBits.ManageMessages,
+                PermissionFlagsBits.ManageRoles,
+                PermissionFlagsBits.KickMembers,
+                PermissionFlagsBits.BanMembers,
+                PermissionFlagsBits.ModerateMembers,
+                PermissionFlagsBits.MuteMembers,
+                PermissionFlagsBits.DeafenMembers,
+                PermissionFlagsBits.MoveMembers,
+                PermissionFlagsBits.ManageNicknames,
+                PermissionFlagsBits.ManageGuildExpressions,
+                PermissionFlagsBits.ViewAuditLog,
+                PermissionFlagsBits.MentionEveryone,
+            ],
+            hoist: true,
+        },
     ];
 
-    const createdRoles = [];
-    for (const rd of roleDefs) {
+    // Fun roles — no permissions, just vibes
+    const funRoles = [
+        { name: '🎭 Тусовщик',       color: '#FF6B9D' as ColorResolvable },
+        { name: '🌙 Ночной Дозор',   color: '#2C2137' as ColorResolvable },
+        { name: '🎮 Геймер',          color: '#00D26A' as ColorResolvable },
+        { name: '🎨 Творец',          color: '#E040FB' as ColorResolvable },
+        { name: '💀 Легенда',         color: '#B0BEC5' as ColorResolvable },
+        { name: '🔥 Токсик',          color: '#FF3D00' as ColorResolvable },
+        { name: '🐱 Котолюб',         color: '#FFAB40' as ColorResolvable },
+        { name: '🤡 Клоун',           color: '#FFEE58' as ColorResolvable },
+        { name: '🧠 Мудрец',          color: '#7C4DFF' as ColorResolvable },
+        { name: '💎 OG',              color: '#00E5FF' as ColorResolvable },
+    ];
+
+    const createdStaffRoles = [];
+    for (const rd of staffRoles) {
         let role = guild.roles.cache.find(r => r.name === rd.name);
         if (!role) {
             role = await guild.roles.create({
                 name: rd.name,
                 color: rd.color,
                 permissions: rd.permissions,
+                hoist: rd.hoist,
             });
         }
-        createdRoles.push(role);
+        createdStaffRoles.push(role);
     }
 
-    const kingRole = createdRoles[0];
-    const almostKingRole = createdRoles[1];
+    for (const rd of funRoles) {
+        const exists = guild.roles.cache.find(r => r.name === rd.name);
+        if (!exists) {
+            await guild.roles.create({
+                name: rd.name,
+                color: rd.color,
+                permissions: [],
+                hoist: false,
+            });
+        }
+    }
 
-    // ── 2. Category ──
+    const kingRole = createdStaffRoles[0];
+    const almostKingRole = createdStaffRoles[1];
+
+    // ══════════════════════════════════════════
+    //  2. CATEGORY
+    // ══════════════════════════════════════════
+
     const category = await guild.channels.create({
         name: '🌟 COMMUNITY',
         type: ChannelType.GuildCategory,
     });
 
-    // ── 3. Text Channels ──
+    // ══════════════════════════════════════════
+    //  3. TEXT CHANNELS
+    // ══════════════════════════════════════════
+
     const generalChat = await guild.channels.create({
         name: '💬・чятик',
         type: ChannelType.GuildText,
         parent: category.id,
     });
 
+    // Канал для приветствий новых участников
     const welcomeChannel = await guild.channels.create({
         name: '🔔・участники',
         type: ChannelType.GuildText,
         parent: category.id,
+        topic: 'Здесь появляются уведомления о новых участниках сервера 🎉',
+        permissionOverwrites: [
+            {
+                id: guild.id,
+                deny: [PermissionFlagsBits.SendMessages],
+                allow: [PermissionFlagsBits.ViewChannel],
+            },
+            {
+                id: botId,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.EmbedLinks,
+                ],
+            },
+        ],
+    });
+
+    // Канал команд — только для бот-команд, обычные сообщения удаляются
+    const commandsChannel = await guild.channels.create({
+        name: '🤖・команды',
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: '⚡ Канал для команд бота. Пиши слеш-команды здесь! Обычные сообщения удаляются автоматически.',
+    });
+
+    // Канал музыки — для управления музыкой
+    const musicChannel = await guild.channels.create({
+        name: '🎵・музыка',
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: '🎧 Пиши /музыка <название> чтобы включить трек. Также: /скип, /стоп, /очередь',
     });
 
     const voiceLogs = await guild.channels.create({
@@ -86,14 +178,16 @@ export async function handleSetup(guild: Guild) {
         ],
     });
 
-    // ── 4. Forum Channel (идеи) ──
-    let ideasChannel = null;
+    // ══════════════════════════════════════════
+    //  4. FORUM — ИДЕИ
+    // ══════════════════════════════════════════
+
     try {
-        ideasChannel = await guild.channels.create({
+        await guild.channels.create({
             name: '💡・идеи',
             type: ChannelType.GuildForum,
             parent: category.id,
-            topic: 'Предлагай свои идеи для сервера! Нажми ➕ чтобы создать пост.',
+            topic: 'Предлагай идеи для сервера! Нажми ➕ чтобы создать пост.',
             defaultForumLayout: ForumLayoutType.ListView,
             availableTags: [
                 { name: '💡 Идея!', moderated: false },
@@ -103,18 +197,20 @@ export async function handleSetup(guild: Guild) {
                 { name: '🎮 Мини-игра', moderated: false },
             ],
         });
-    } catch (err) {
-        console.warn('[setup] Could not create forum channel (requires Community server):', err);
-        // Fallback: create a regular text channel for ideas
-        ideasChannel = await guild.channels.create({
+    } catch {
+        // Fallback for non-Community servers
+        await guild.channels.create({
             name: '💡・идеи',
             type: ChannelType.GuildText,
             parent: category.id,
-            topic: 'Предлагай свои идеи для сервера!',
+            topic: 'Предлагай идеи для сервера!',
         });
     }
 
-    // ── 5. Voice Channels ──
+    // ══════════════════════════════════════════
+    //  5. VOICE CHANNELS
+    // ══════════════════════════════════════════
+
     await guild.channels.create({
         name: '🔊 Lobby',
         type: ChannelType.GuildVoice,
@@ -131,7 +227,7 @@ export async function handleSetup(guild: Guild) {
     }
 
     await guild.channels.create({
-        name: '🎵 Музыка',
+        name: '🎧 Музыка',
         type: ChannelType.GuildVoice,
         parent: category.id,
     });
@@ -142,23 +238,36 @@ export async function handleSetup(guild: Guild) {
         parent: category.id,
     });
 
-    // ── 6. Save config to DB ──
+    // ══════════════════════════════════════════
+    //  6. SAVE CONFIG
+    // ══════════════════════════════════════════
+
     await db.insert(guildConfigs).values({
         guildId: guild.id,
         logsChannelId: voiceLogs.id,
         generatorChannelId: generator.id,
         categoryId: category.id,
+        welcomeChannelId: welcomeChannel.id,
+        commandsChannelId: commandsChannel.id,
+        musicChannelId: musicChannel.id,
     }).onConflictDoUpdate({
         target: guildConfigs.guildId,
         set: {
             logsChannelId: voiceLogs.id,
             generatorChannelId: generator.id,
             categoryId: category.id,
+            welcomeChannelId: welcomeChannel.id,
+            commandsChannelId: commandsChannel.id,
+            musicChannelId: musicChannel.id,
         },
     });
 
-    // ── 7. Control panel embed ──
-    const embed = new EmbedBuilder()
+    // ══════════════════════════════════════════
+    //  7. EMBEDS
+    // ══════════════════════════════════════════
+
+    // Control panel in general chat
+    const controlEmbed = new EmbedBuilder()
         .setTitle('🎮 Управление приватной комнатой')
         .setDescription(
             'Зайди в **➕ Создать Комнату** — бот создаст твой голосовой канал.\n\n' +
@@ -171,9 +280,9 @@ export async function handleSetup(guild: Guild) {
             '🎙️ — мут / размут\n' +
             'ℹ️ — информация о комнате\n\n' +
             '**Кнопки работают только у владельца.**\n' +
-            'Когда комната опустеет — она удалится автоматически.'
+            'Когда комната опустеет — она удалится.'
         )
-        .setColor('#8B5CF6')
+        .setColor(0x8B5CF6)
         .setFooter({ text: 'Appoez Bot • Community Server' });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -190,18 +299,55 @@ export async function handleSetup(guild: Guild) {
         new ButtonBuilder().setCustomId('room_info').setEmoji('ℹ️').setStyle(ButtonStyle.Secondary),
     );
 
-    await generalChat.send({ embeds: [embed], components: [row1, row2] });
+    await generalChat.send({ embeds: [controlEmbed], components: [row1, row2] });
 
-    // ── 8. Welcome message in welcome channel ──
-    const welcomeEmbed = new EmbedBuilder()
-        .setTitle('🔔 Добро пожаловать!')
+    // Info embed in commands channel
+    const cmdEmbed = new EmbedBuilder()
+        .setTitle('🤖 Канал команд')
         .setDescription(
-            'Здесь будут отображаться новые участники сервера.\n' +
-            'Настрой системный канал сервера на этот канал для уведомлений о входах.'
+            'Этот канал только для **слеш-команд** бота.\n' +
+            'Обычные сообщения удаляются автоматически.\n\n' +
+            '**Доступные команды:**\n' +
+            '`/музыка` — включить трек\n' +
+            '`/скип` — пропустить\n' +
+            '`/стоп` — остановить\n' +
+            '`/очередь` — текущая очередь\n' +
+            '`/стата` — статистика участника\n' +
+            '`/муте` — замутить (модераторы)\n' +
+            '`/сетап` — настройка сервера (админы)\n'
         )
-        .setColor('#F59E0B');
+        .setColor(0x5865F2)
+        .setFooter({ text: 'Appoez Bot • Пиши команды здесь!' });
+
+    await commandsChannel.send({ embeds: [cmdEmbed] });
+
+    // Info embed in music channel
+    const musicEmbed = new EmbedBuilder()
+        .setTitle('🎵 Музыкальный канал')
+        .setDescription(
+            'Управляй музыкой бота здесь!\n\n' +
+            '**Команды:**\n' +
+            '`/музыка <название или ссылка>` — добавить трек\n' +
+            '`/скип` — пропустить текущий трек\n' +
+            '`/стоп` — остановить и очистить очередь\n' +
+            '`/очередь` — показать очередь\n\n' +
+            '💡 Сначала зайди в голосовой канал 🎧 **Музыка**!'
+        )
+        .setColor(0xE040FB)
+        .setFooter({ text: 'Appoez Bot • Музыка' });
+
+    await musicChannel.send({ embeds: [musicEmbed] });
+
+    // Welcome embed in welcome channel
+    const welcomeEmbed = new EmbedBuilder()
+        .setTitle('🔔 Канал участников')
+        .setDescription(
+            'Здесь появляются уведомления когда кто-то заходит на сервер.\n' +
+            'Приветствуйте новичков! 🎉'
+        )
+        .setColor(0xF59E0B);
 
     await welcomeChannel.send({ embeds: [welcomeEmbed] });
 
-    return { generalChat, voiceLogs, generator, ideasChannel, welcomeChannel };
+    return { generalChat, voiceLogs, generator, welcomeChannel, commandsChannel, musicChannel };
 }

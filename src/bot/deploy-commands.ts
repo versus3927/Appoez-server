@@ -3,7 +3,7 @@ import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.
 const commands = [
     new SlashCommandBuilder()
         .setName('сетап')
-        .setDescription('Настроить сервер (Community Server)')
+        .setDescription('Настроить сервер (создать каналы, роли)')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
         .setName('муте')
@@ -18,18 +18,18 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
         .setName('стата')
-        .setDescription('Показать статистику')
+        .setDescription('Показать статистику участника')
         .addUserOption(option => option.setName('user').setDescription('Пользователь').setRequired(false)),
     new SlashCommandBuilder()
-        .setName('плей')
-        .setDescription('Играть музыку')
+        .setName('музыка')
+        .setDescription('Включить музыку')
         .addStringOption(option => option.setName('query').setDescription('Название песни или ссылка').setRequired(true)),
     new SlashCommandBuilder()
         .setName('скип')
         .setDescription('Пропустить текущий трек'),
     new SlashCommandBuilder()
         .setName('стоп')
-        .setDescription('Остановить воспроизведение и очистить очередь'),
+        .setDescription('Остановить и очистить очередь'),
     new SlashCommandBuilder()
         .setName('очередь')
         .setDescription('Показать текущую очередь'),
