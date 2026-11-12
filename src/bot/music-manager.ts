@@ -149,14 +149,25 @@ async function playNext(key: string): Promise<void> {
 }
 
 function chooseVoiceGuild(member: GuildMember): { guild: Guild; agent: MusicBotAgent | null } {
+  // Always prefer a pool agent. NEVER fall back to primary bot when pool exists —
+  // primary bot can only be in one voice channel at a time and will "jump" between channels.
   const agent = acquireFreeMusicAgent(member.guild.id);
   if (agent) {
     const agentGuild = agent.client.guilds.cache.get(member.guild.id);
     if (agentGuild) {
+      console.log(`[music] Assigned agent ${agent.client.user?.tag} to voice ${member.voice.channelId}`);
       return { guild: agentGuild, agent };
     }
     releaseMusicAgent(agent.client.user?.id);
   }
+
+  // If pool is configured but all agents are busy — don't use primary bot
+  const poolAgents = getMusicAgents();
+  if (poolAgents.length > 0) {
+    throw new Error('Все музыкальные боты заняты! Подожди пока один освободится.');
+  }
+
+  // No pool configured — use primary bot (single-channel mode)
   return { guild: member.guild, agent: null };
 }
 
@@ -243,15 +254,6 @@ export async function enqueueMusic(
   let state = states.get(key);
 
   if (!state) {
-    const extraAgents = getMusicAgents();
-    if (extraAgents.length > 0) {
-      const anyFree = extraAgents.some((agent) => !agent.busy && agent.client.guilds.cache.has(member.guild.id));
-      const hasStateInVoice = states.has(key);
-      if (!anyFree && !hasStateInVoice) {
-        throw new Error('Все музыкальные боты сейчас заняты. Попробуй позже.');
-      }
-    }
-
     state = createState(member, interaction);
     await entersState(state.connection, VoiceConnectionStatus.Ready, 20_000);
   }
