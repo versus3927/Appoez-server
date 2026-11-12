@@ -1,66 +1,78 @@
-import { Message } from 'discord.js';
-import { db } from '@/db';
-import { guildConfigs, userStats } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import type { Message } from 'discord.js';
+import { getCachedConfig } from '../guild-config-cache';
 
-// Cache to avoid DB query on every message
-const commandsChannelCache = new Map<string, string | null>();
+const READONLY_CHANNEL_NAMES = new Set([
+  '🔔・участники',
+  '📋・voice-logs',
+  '📌・правила',
+  '📚・faq',
+  '💞・tag',
+  '💗・анонимки',
+  '🎮・управление',
+]);
 
-async function getCommandsChannelId(guildId: string): Promise<string | null> {
-    if (commandsChannelCache.has(guildId)) {
-        return commandsChannelCache.get(guildId)!;
-    }
+async function resolveCommandsChannelId(message: Message): Promise<string | null> {
+  try {
+    const { db } = await import('@/db');
+    const { guildConfigs } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const config = await db.query.guildConfigs.findFirst({
+      where: eq(guildConfigs.guildId, message.guild!.id),
+    });
+    if (config?.commandsChannelId) return config.commandsChannelId;
+  } catch {
+    // ignore
+  }
 
-    try {
-        const config = await db.query.guildConfigs.findFirst({
-            where: eq(guildConfigs.guildId, guildId),
-        });
-        const id = config?.commandsChannelId ?? null;
-        commandsChannelCache.set(guildId, id);
-        // Refresh cache every 5 minutes
-        setTimeout(() => commandsChannelCache.delete(guildId), 5 * 60 * 1000);
-        return id;
-    } catch {
-        return null;
-    }
+  const cached = getCachedConfig(message.guild!.id);
+  if (cached?.commandsChannelId) return cached.commandsChannelId;
+
+  const byName = message.guild!.channels.cache.find(
+    (channel) => channel.type === 0 && channel.name === '🤖・команды',
+  );
+  return byName?.id ?? null;
 }
 
 export async function handleMessageCreate(message: Message) {
-    if (message.author.bot || !message.guild) return;
+  if (message.author.bot || !message.guild) return;
 
-    // ── Auto-delete non-command messages in 🤖・команды channel ──
-    try {
-        const cmdChannelId = await getCommandsChannelId(message.guild.id);
-        if (cmdChannelId && message.channelId === cmdChannelId) {
-            // Slash commands are interactions, not messages.
-            // Any regular text message in this channel gets deleted.
-            const warning = await message.reply(
-                '⚠️ Этот канал только для **слеш-команд**! Напиши `/` чтобы увидеть список.'
-            );
-            // Delete both messages after 4 seconds
-            setTimeout(() => {
-                message.delete().catch(() => {});
-                warning.delete().catch(() => {});
-            }, 4000);
-            return; // Don't count this message in stats
-        }
-    } catch {
-        // Ignore errors in cleanup logic
-    }
+  const channelName = ('name' in message.channel ? message.channel.name : '') ?? '';
 
-    // ── Message stats ──
-    try {
-        await db.insert(userStats).values({
-            userId: message.author.id,
-            guildId: message.guild.id,
-            messageCount: 1,
-        }).onConflictDoUpdate({
-            target: userStats.userId,
-            set: {
-                messageCount: sql`${userStats.messageCount} + 1`,
-            },
-        });
-    } catch (err) {
-        console.error('[messageCreate] Stats error:', err);
-    }
+  // Delete regular messages in commands channel
+  const commandsChannelId = await resolveCommandsChannelId(message);
+  if (commandsChannelId && message.channelId === commandsChannelId) {
+    const warning = await message.reply('⚠️ Этот канал только для **слеш-команд**! Нажми `/` и выбери команду.').catch(() => null);
+    setTimeout(() => {
+      void message.delete().catch(() => {});
+      void warning?.delete().catch(() => {});
+    }, 4000);
+    return;
+  }
+
+  // Delete regular messages in readonly channels
+  if (READONLY_CHANNEL_NAMES.has(channelName)) {
+    const warning = await message.reply('⚠️ Этот канал только для чтения / кнопок.').catch(() => null);
+    setTimeout(() => {
+      void message.delete().catch(() => {});
+      void warning?.delete().catch(() => {});
+    }, 4000);
+    return;
+  }
+
+  // Non-critical stats update — ignore DB errors
+  try {
+    const { db } = await import('@/db');
+    const { userStats } = await import('@/db/schema');
+    const { sql } = await import('drizzle-orm');
+    await db.insert(userStats).values({
+      userId: message.author.id,
+      guildId: message.guild.id,
+      messageCount: 1,
+    }).onConflictDoUpdate({
+      target: userStats.userId,
+      set: { messageCount: sql`${userStats.messageCount} + 1` },
+    });
+  } catch {
+    // Database may be unavailable on Railway; ignore
+  }
 }
