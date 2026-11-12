@@ -12,11 +12,12 @@ import {
 import { db } from '@/db';
 import { privateRooms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { getPrivateRoom } from '../private-room-cache';
 import { handleMute, handleDelete, handleStats } from '../commands/handlers';
 import { handleAnonymousSlash, handleAvatar, handle8Ball, handleRoll, postAnonymousMessage } from '../commands/fun';
 import { handlePlay, handleQueue, handleSkip, handleStop } from '../commands/music';
 import { handleSetup } from '../commands/setup';
+import { getCachedConfig } from '../guild-config-cache';
+import { getPrivateRoom } from '../private-room-cache';
 
 export async function handleInteraction(interaction: Interaction) {
   if (interaction.isChatInputCommand()) {
@@ -33,6 +34,28 @@ export async function handleInteraction(interaction: Interaction) {
         await interaction.editReply(`❌ Ошибка при настройке: ${message}`).catch(() => {});
       }
       return;
+    }
+
+    const musicCommands = ['музыка', 'скип', 'стоп', 'очередь'];
+    if (musicCommands.includes(commandName) && interaction.guild) {
+      let config = null;
+      try {
+        const { db } = await import('@/db');
+        const { guildConfigs } = await import('@/db/schema');
+        config = await db.query.guildConfigs.findFirst({
+          where: eq(guildConfigs.guildId, interaction.guild.id),
+        });
+      } catch {
+        config = getCachedConfig(interaction.guild.id);
+      }
+      if (!config) config = getCachedConfig(interaction.guild.id);
+
+      if (config?.musicChannelId && interaction.channelId !== config.musicChannelId) {
+        return interaction.reply({
+          content: `❌ Команды музыки можно использовать только в канале <#${config.musicChannelId}>!`,
+          ephemeral: true,
+        });
+      }
     }
 
     if (commandName === 'муте') return handleMute(interaction);
@@ -55,7 +78,7 @@ export async function handleInteraction(interaction: Interaction) {
       const modal = new ModalBuilder().setCustomId('modal_anon_send').setTitle('💗 Анонимное сообщение');
       const target = new TextInputBuilder()
         .setCustomId('anon_target')
-        .setLabel('Кому (ник, тег или ID)')
+        .setLabel('Кому (упоминание, ник или ID)')
         .setStyle(TextInputStyle.Short)
         .setMaxLength(100)
         .setRequired(true);
@@ -180,8 +203,14 @@ export async function handleInteraction(interaction: Interaction) {
     const { customId, guild, channelId } = interaction;
 
     if (customId === 'modal_anon_send') {
-      const targetLabel = interaction.fields.getTextInputValue('anon_target');
+      let targetLabel = interaction.fields.getTextInputValue('anon_target');
       const message = interaction.fields.getTextInputValue('anon_message');
+      
+      // If user typed ID or name, try to resolve it to ping them properly
+      if (/^\d{17,20}$/.test(targetLabel)) {
+          targetLabel = `<@${targetLabel}>`;
+      }
+
       try {
         await postAnonymousMessage(interaction.guild, targetLabel, message);
         return interaction.reply({ content: '✅ Анонимка отправлена.', ephemeral: true });

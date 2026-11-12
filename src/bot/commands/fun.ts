@@ -1,4 +1,4 @@
-import { EmbedBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import { EmbedBuilder, type ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 export async function handleRoll(interaction: ChatInputCommandInteraction) {
   const roll = Math.floor(Math.random() * 100) + 1;
@@ -6,22 +6,27 @@ export async function handleRoll(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handle8Ball(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   const question = interaction.options.getString('question', true);
-  const answers = [
-    'Бесспорно.', 'Предрешено.', 'Никаких сомнений.', 'Определённо да.', 'Можешь быть уверен в этом.',
-    'Мне кажется — да.', 'Вероятнее всего.', 'Хорошие перспективы.', 'Знаки говорят — да.', 'Да.',
-    'Пока неясно, попробуй снова.', 'Спроси позже.', 'Лучше не рассказывать.', 'Сейчас нельзя предсказать.', 'Сконцентрируйся и спроси опять.',
-    'Даже не думай.', 'Мой ответ — нет.', 'По моим данным — нет.', 'Перспективы не очень хорошие.', 'Весьма сомнительно.',
-  ];
-  const answer = answers[Math.floor(Math.random() * answers.length)];
-  const embed = new EmbedBuilder()
-    .setTitle('🎱 Магический Шар')
-    .addFields(
-      { name: 'Вопрос', value: question },
-      { name: 'Ответ', value: answer },
-    )
-    .setColor(0x9b59b6);
-  await interaction.reply({ embeds: [embed] });
+  
+  try {
+    const res = await fetch(`https://hercai.onrender.com/v3/hercai?question=${encodeURIComponent(question)}`);
+    const data = await res.json();
+    const reply = data.reply || 'Я сейчас не могу ответить, попробуй позже.';
+    
+    const embed = new EmbedBuilder()
+      .setTitle('🤖 ИИ Ассистент')
+      .addFields(
+        { name: 'Вопрос', value: question },
+        { name: 'Ответ', value: reply },
+      )
+      .setColor(0x9b59b6);
+      
+    await interaction.editReply({ embeds: [embed] });
+  } catch (error) {
+    console.error('[ai] API Error:', error);
+    await interaction.editReply('❌ ИИ сейчас недоступен. Попробуй позже.');
+  }
 }
 
 export async function handleAvatar(interaction: ChatInputCommandInteraction) {
@@ -31,18 +36,6 @@ export async function handleAvatar(interaction: ChatInputCommandInteraction) {
     .setImage(user.displayAvatarURL({ size: 1024 }))
     .setColor(0x3498db);
   await interaction.reply({ embeds: [embed] });
-}
-
-function buildAnonymousEmbed(targetLabel: string, message: string) {
-  return new EmbedBuilder()
-    .setTitle('💗 Новое анонимное послание!')
-    .addFields(
-      { name: 'От кого', value: 'Анонимное сообщение' },
-      { name: 'Кому', value: targetLabel },
-      { name: 'Сообщение', value: message },
-    )
-    .setColor(0xec4899)
-    .setTimestamp();
 }
 
 export async function handleAnonymousSlash(interaction: ChatInputCommandInteraction) {
@@ -57,7 +50,24 @@ export async function handleAnonymousSlash(interaction: ChatInputCommandInteract
     return interaction.reply({ content: '❌ Канал анонимок не найден. Запусти /сетап заново.', ephemeral: true });
   }
 
-  await (channel as any).send({ embeds: [buildAnonymousEmbed(`<@${target.id}>`, message)] });
+  const embed = new EmbedBuilder()
+    .setTitle('Новое послание!')
+    .addFields(
+      { name: 'От кого:', value: '| Анонимное сообщение' },
+      { name: 'Кому:', value: `| <@${target.id}>` },
+      { name: 'Сообщение:', value: `| ${message}` },
+    )
+    .setColor(0x1a1a1a);
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('anon_open')
+      .setLabel('Написать сообщение')
+      .setEmoji('💗')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  await (channel as any).send({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
   return interaction.reply({ content: '✅ Анонимка отправлена.', ephemeral: true });
 }
 
@@ -68,5 +78,24 @@ export async function postAnonymousMessage(guild: ChatInputCommandInteraction['g
   if (!channel || !('send' in channel)) {
     throw new Error('Канал анонимок не найден');
   }
-  await (channel as any).send({ embeds: [buildAnonymousEmbed(targetLabel, message)] });
+
+  const embed = new EmbedBuilder()
+    .setTitle('Новое послание!')
+    .addFields(
+      { name: 'От кого:', value: '| Анонимное сообщение' },
+      { name: 'Кому:', value: `| ${targetLabel}` },
+      { name: 'Сообщение:', value: `| ${message}` },
+    )
+    .setColor(0x1a1a1a);
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('anon_open')
+      .setLabel('Написать сообщение')
+      .setEmoji('💗')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  // Send the mention outside the embed so it actually pings the user
+  await (channel as any).send({ content: targetLabel, embeds: [embed], components: [row] });
 }

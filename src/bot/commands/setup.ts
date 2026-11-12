@@ -140,26 +140,6 @@ export async function handleSetup(guild: Guild) {
     parent: chatCategory.id,
   });
 
-  const faqChannel = await guild.channels.create({
-    name: '📚・faq',
-    type: ChannelType.GuildText,
-    parent: interestingCategory.id,
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
-      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
-    ],
-  });
-
-  const rulesChannel = await guild.channels.create({
-    name: '📌・правила',
-    type: ChannelType.GuildText,
-    parent: serviceCategory.id,
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
-      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
-    ],
-  });
-
   const commandsChannel = await guild.channels.create({
     name: '🤖・команды',
     type: ChannelType.GuildText,
@@ -174,6 +154,36 @@ export async function handleSetup(guild: Guild) {
     topic: '🎧 /музыка <название> • /скип • /стоп • /очередь',
   });
 
+  const voiceLogs = await guild.channels.create({
+    name: '📋・voice-logs',
+    type: ChannelType.GuildText,
+    parent: serviceCategory.id,
+    topic: 'Логи голосовых каналов.',
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      {
+        id: botId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.ReadMessageHistory,
+        ],
+      },
+      { id: kingRole.id, allow: [PermissionFlagsBits.ViewChannel] },
+    ],
+  });
+
+  const rulesChannel = await guild.channels.create({
+    name: '📌・правила',
+    type: ChannelType.GuildText,
+    parent: serviceCategory.id,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
+      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
+    ],
+  });
+
   const mediaChannel = await guild.channels.create({
     name: '💞・медиа',
     type: ChannelType.GuildText,
@@ -181,21 +191,15 @@ export async function handleSetup(guild: Guild) {
     topic: 'Фото, видео, мемы и всё красивое.',
   });
 
-  const rolesChannel = await guild.channels.create({
-    name: '💞・tag',
-    type: ChannelType.GuildText,
-    parent: interestingCategory.id,
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
-      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
-    ],
-  });
-
   const pollsChannel = await guild.channels.create({
     name: '❔・опросы',
     type: ChannelType.GuildText,
     parent: interestingCategory.id,
     topic: 'Обсуждения, голосования и опросы.',
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
+      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
+    ],
   });
 
   const anonymousChannel = await guild.channels.create({
@@ -207,39 +211,6 @@ export async function handleSetup(guild: Guild) {
       { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
     ],
     topic: 'Анонимные сообщения через кнопку ниже.',
-  });
-
-  const roomControlChannel = await guild.channels.create({
-    name: '🎮・управление',
-    type: ChannelType.GuildText,
-    parent: serviceCategory.id,
-    topic: 'Кнопки управления твоей приватной комнатой.',
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
-      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
-      { id: kingRole.id, allow: [PermissionFlagsBits.SendMessages] },
-    ],
-  });
-
-  const voiceLogs = await guild.channels.create({
-    name: '📋・voice-logs',
-    type: ChannelType.GuildText,
-    parent: serviceCategory.id,
-    topic: 'Логи голосовых каналов.',
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-      {
-        id: botId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.EmbedLinks,
-          PermissionFlagsBits.ReadMessageHistory,
-        ],
-      },
-      { id: kingRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-      { id: almostRole.id, allow: [PermissionFlagsBits.ViewChannel] },
-    ],
   });
 
   try {
@@ -265,6 +236,25 @@ export async function handleSetup(guild: Guild) {
     });
   }
 
+  // 🎮 Управление НАД "Создать комнату" (Discord puts Text above Voice in same category)
+  const roomControlChannel = await guild.channels.create({
+    name: '🎮・управление',
+    type: ChannelType.GuildText,
+    parent: voiceCategory.id,
+    topic: 'Кнопки управления твоей приватной комнатой.',
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
+      { id: botId, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks] },
+      { id: kingRole.id, allow: [PermissionFlagsBits.SendMessages] },
+    ],
+  });
+
+  const generator = await guild.channels.create({
+    name: '➕ Создать Комнату',
+    type: ChannelType.GuildVoice,
+    parent: voiceCategory.id,
+  });
+  
   await guild.channels.create({ name: '🔊 Lobby', type: ChannelType.GuildVoice, parent: voiceCategory.id });
   for (let i = 1; i <= 4; i += 1) {
     await guild.channels.create({
@@ -276,11 +266,6 @@ export async function handleSetup(guild: Guild) {
   }
   await guild.channels.create({ name: '🎧 Музыка', type: ChannelType.GuildVoice, parent: voiceCategory.id });
   await guild.channels.create({ name: '🎲 Игры', type: ChannelType.GuildVoice, parent: voiceCategory.id });
-  const generator = await guild.channels.create({
-    name: '➕ Создать Комнату',
-    type: ChannelType.GuildVoice,
-    parent: voiceCategory.id,
-  });
 
   const configData = {
     guildId: guild.id,
@@ -299,14 +284,7 @@ export async function handleSetup(guild: Guild) {
     const { guildConfigs } = await import('@/db/schema');
     await db.insert(guildConfigs).values(configData).onConflictDoUpdate({
       target: guildConfigs.guildId,
-      set: {
-        logsChannelId: voiceLogs.id,
-        generatorChannelId: generator.id,
-        categoryId: voiceCategory.id,
-        welcomeChannelId: welcomeChannel.id,
-        commandsChannelId: commandsChannel.id,
-        musicChannelId: musicChannel.id,
-      },
+      set: configData,
     });
   } catch (error) {
     console.error('[setup] DB save failed:', error);
@@ -350,12 +328,6 @@ export async function handleSetup(guild: Guild) {
 
   await profileChannel.send({
     embeds: [new EmbedBuilder().setTitle('🧑‍🚀 Профиль').setDescription('Расскажи о себе: чем занимаешься, во что играешь, что любишь.').setColor(0x60a5fa)],
-  });
-  await faqChannel.send({
-    embeds: [new EmbedBuilder().setTitle('📚 FAQ').setDescription('Здесь будут ответы на частые вопросы, полезные ссылки и подсказки для новичков.').setColor(0x10b981)],
-  });
-  await rolesChannel.send({
-    embeds: [new EmbedBuilder().setTitle('💞 Фан-роли').setDescription(funRoleDefs.map((role) => `• ${role.name}`).join('\n')).setColor(0xf472b6)],
   });
   await rulesChannel.send({
     embeds: [new EmbedBuilder().setTitle('📌 Правила').setDescription('**1.** Уважай других\n**2.** Не спамь\n**3.** Не оскорбляй\n**4.** Реклама запрещена\n**5.** Слушайся админов').setColor(0xf59e0b)],

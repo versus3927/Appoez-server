@@ -107,7 +107,7 @@ async function playNext(guildId: string): Promise<void> {
 
   try {
     const stream = ytdl.download(next.url, {
-      filter: 'audioonly',
+      filter: (format: any) => format.hasAudio && !format.hasVideo,
       quality: 'highestaudio',
       highWaterMark: 1 << 25,
     } as any);

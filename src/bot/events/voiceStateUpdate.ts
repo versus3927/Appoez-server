@@ -7,7 +7,7 @@ import {
   type VoiceState,
 } from 'discord.js';
 import { getCachedConfig } from '../guild-config-cache';
-import { deletePrivateRoom, setPrivateRoom } from '../private-room-cache';
+import { deletePrivateRoom, getPrivateRoom, setPrivateRoom } from '../private-room-cache';
 
 async function resolveConfig(guildId: string) {
   try {
@@ -122,18 +122,41 @@ export async function handleVoiceStateUpdate(oldState: VoiceState, newState: Voi
     }
   }
 
+  // Handle cleanup of private rooms when a user leaves
   if (oldChannelId) {
     try {
+      let isRoom = false;
+      const cached = getPrivateRoom(oldChannelId);
+      if (cached) {
+        isRoom = true;
+      } else {
+        try {
+          const { db } = await import('@/db');
+          const { privateRooms } = await import('@/db/schema');
+          const { eq } = await import('drizzle-orm');
+          const row = await db.query.privateRooms.findFirst({ where: eq(privateRooms.channelId, oldChannelId) });
+          if (row) isRoom = true;
+        } catch { /* ignore */ }
+      }
+
       const previousChannel = guild.channels.cache.get(oldChannelId);
+      
+      // If it's a known private room OR has the 🏠・ prefix, and it's empty, delete it
       if (previousChannel?.isVoiceBased() && previousChannel.members.size === 0) {
-        const isPrivateRoom = previousChannel.name.startsWith('🏠・');
-        if (isPrivateRoom) {
+        if (isRoom || previousChannel.name.startsWith('🏠・')) {
           await previousChannel.delete().catch(() => {});
           deletePrivateRoom(oldChannelId);
+          
+          try {
+            const { db } = await import('@/db');
+            const { privateRooms } = await import('@/db/schema');
+            const { eq } = await import('drizzle-orm');
+            await db.delete(privateRooms).where(eq(privateRooms.channelId, oldChannelId));
+          } catch { /* ignore */ }
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('[voice] Cleanup room error:', err);
     }
   }
 
