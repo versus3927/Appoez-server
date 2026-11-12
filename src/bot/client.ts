@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { Player } from 'discord-player';
 
 export const client = new Client({
@@ -12,8 +12,6 @@ export const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
 });
 
-export const player = new Player(client);
-// Options are now configured per-request or globally via extractors
-
-
-// We'll load extractors later in the entry point
+export const player = new Player(client, {
+    skipFFmpeg: false,
+});

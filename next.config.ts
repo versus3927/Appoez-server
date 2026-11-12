@@ -5,13 +5,14 @@ const nextConfig: NextConfig = {
         'discord.js',
         '@discordjs/voice',
         '@discordjs/opus',
+        'opusscript',
         'discord-player',
         '@discord-player/extractor',
         'ffmpeg-static',
         'libsodium-wrappers',
         'zlib-sync',
         'bufferutil',
-        'utf-8-validate'
+        'utf-8-validate',
     ],
 };
 

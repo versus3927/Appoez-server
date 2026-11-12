@@ -24,6 +24,15 @@ const commands = [
         .setName('плей')
         .setDescription('Играть музыку')
         .addStringOption(option => option.setName('query').setDescription('Название песни или ссылка').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('скип')
+        .setDescription('Пропустить текущий трек'),
+    new SlashCommandBuilder()
+        .setName('стоп')
+        .setDescription('Остановить воспроизведение и очистить очередь'),
+    new SlashCommandBuilder()
+        .setName('очередь')
+        .setDescription('Показать текущую очередь'),
 ].map(command => command.toJSON());
 
 export async function deployCommands() {
@@ -31,17 +40,17 @@ export async function deployCommands() {
     const clientId = process.env.DISCORD_CLIENT_ID;
 
     if (!token || !clientId) {
-        console.error('DISCORD_TOKEN or DISCORD_CLIENT_ID is missing');
+        console.error('[commands] DISCORD_TOKEN or DISCORD_CLIENT_ID is missing');
         return;
     }
 
     const rest = new REST({ version: '10' }).setToken(token);
 
     try {
-        console.log('Started refreshing application (/) commands.');
+        console.log('[commands] Refreshing application (/) commands...');
         await rest.put(Routes.applicationCommands(clientId), { body: commands });
-        console.log('Successfully reloaded application (/) commands.');
+        console.log('[commands] Successfully reloaded application (/) commands.');
     } catch (error) {
-        console.error(error);
+        console.error('[commands] Failed to deploy commands:', error);
     }
 }
