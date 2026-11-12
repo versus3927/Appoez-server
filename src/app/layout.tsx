@@ -1,16 +1,23 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arena Next.js PostgreSQL Starter",
-  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
+  title: "Appoez — Discord Bot Dashboard",
+  description:
+    "Дашборд Discord-бота: статистика участников, статус бота и базы данных.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#08080d",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">{children}</body>
+    <html lang="ru">
+      <body className="bg-void font-sans text-zinc-200 antialiased">
+        {children}
+      </body>
     </html>
   );
 }

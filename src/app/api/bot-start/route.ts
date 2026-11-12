@@ -1,19 +1,26 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import { startBot } from "@/bot/main";
+import { getBotStatus } from "@/bot/status";
 
-declare global {
-    var botStarted: boolean | undefined;
+export const dynamic = "force-dynamic";
+
+/**
+ * Manual fallback trigger — the bot normally auto-starts via
+ * `src/instrumentation.ts` on server boot. Kept for one-off environments
+ * where the instrumentation hook is unavailable.
+ */
+export async function GET() {
+  const started = await startBot();
+  return NextResponse.json({
+    started,
+    bot: getBotStatus(),
+  });
 }
 
-export async function GET() {
-    if (!global.botStarted) {
-        // Use dynamic import to avoid blocking the main thread during build or early start
-        import('@/bot/main').then(() => {
-            console.log('Bot process started from API call');
-        }).catch(err => {
-            console.error('Failed to start bot:', err);
-        });
-        global.botStarted = true;
-        return NextResponse.json({ status: 'Starting bot...' });
-    }
-    return NextResponse.json({ status: 'Bot already running' });
+export async function POST() {
+  const started = await startBot();
+  return NextResponse.json({
+    started,
+    bot: getBotStatus(),
+  });
 }
