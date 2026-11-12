@@ -148,17 +148,37 @@ async function playNext(key: string): Promise<void> {
   }
 }
 
-function chooseVoiceGuild(member: GuildMember): { guild: Guild; agent: MusicBotAgent | null } {
+async function chooseVoiceGuild(member: GuildMember): Promise<{ guild: Guild; agent: MusicBotAgent | null }> {
   // Always prefer a pool agent. NEVER fall back to primary bot when pool exists —
   // primary bot can only be in one voice channel at a time and will "jump" between channels.
   const agent = acquireFreeMusicAgent(member.guild.id);
   if (agent) {
-    const agentGuild = agent.client.guilds.cache.get(member.guild.id);
+    // Use the agent's guild cache if available, otherwise fetch it
+    let agentGuild = agent.client.guilds.cache.get(member.guild.id);
+    if (!agentGuild) {
+      try {
+        agentGuild = await agent.client.guilds.fetch(member.guild.id);
+      } catch {
+        // Can't access guild — release agent and try next or fall through
+        console.error(`[music] Agent ${agent.client.user?.tag} can't access guild ${member.guild.id}`);
+        releaseMusicAgent(agent.client.user?.id);
+        // Try another agent
+        const nextAgent = acquireFreeMusicAgent(member.guild.id);
+        if (nextAgent) {
+          let nextGuild = nextAgent.client.guilds.cache.get(member.guild.id);
+          if (!nextGuild) try { nextGuild = await nextAgent.client.guilds.fetch(member.guild.id); } catch {}
+          if (nextGuild) {
+            console.log(`[music] Assigned agent ${nextAgent.client.user?.tag} to voice ${member.voice.channelId}`);
+            return { guild: nextGuild, agent: nextAgent };
+          }
+          releaseMusicAgent(nextAgent.client.user?.id);
+        }
+      }
+    }
     if (agentGuild) {
       console.log(`[music] Assigned agent ${agent.client.user?.tag} to voice ${member.voice.channelId}`);
       return { guild: agentGuild, agent };
     }
-    releaseMusicAgent(agent.client.user?.id);
   }
 
   // If pool is configured but all agents are busy — don't use primary bot
@@ -171,10 +191,10 @@ function chooseVoiceGuild(member: GuildMember): { guild: Guild; agent: MusicBotA
   return { guild: member.guild, agent: null };
 }
 
-function createState(member: GuildMember, interaction: ChatInputCommandInteraction): State {
+async function createState(member: GuildMember, interaction: ChatInputCommandInteraction): Promise<State> {
   const voiceChannelId = member.voice.channelId!;
   const key = stateKey(member.guild.id, voiceChannelId);
-  const { guild: voiceGuild, agent } = chooseVoiceGuild(member);
+  const { guild: voiceGuild, agent } = await chooseVoiceGuild(member);
 
   const connection = joinVoiceChannel({
     channelId: voiceChannelId,
@@ -254,7 +274,7 @@ export async function enqueueMusic(
   let state = states.get(key);
 
   if (!state) {
-    state = createState(member, interaction);
+    state = await createState(member, interaction);
     await entersState(state.connection, VoiceConnectionStatus.Ready, 20_000);
   }
 

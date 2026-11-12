@@ -98,10 +98,16 @@ export function getMusicAgents() {
 }
 
 export function acquireFreeMusicAgent(guildId: string): MusicBotAgent | null {
-  const free = agents.find((agent) => !agent.busy && agent.client.guilds.cache.has(guildId));
-  if (!free) return null;
+  // Don't check guilds.cache — music bots may not have cached the guild yet.
+  // They only need GuildVoiceStates intent to join voice channels.
+  const free = agents.find((agent) => !agent.busy && agent.client.isReady());
+  if (!free) {
+    console.log('[music-pool] No free agent. Status:', agents.map(a => (a.client.user?.tag ?? '?') + '=' + (a.busy ? 'BUSY' : 'FREE')).join(', '));
+    return null;
+  }
   free.busy = true;
   free.currentGuildId = guildId;
+  console.log(`[music-pool] Acquired agent: ${free.client.user?.tag} for guild ${guildId}`);
   return free;
 }
 
