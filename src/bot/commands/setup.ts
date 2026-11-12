@@ -58,6 +58,7 @@ export async function handleSetup(guild: Guild) {
   const commandsChannel = await guild.channels.create({ name: '🤖・команды', type: ChannelType.GuildText, parent: catService.id, topic: '⚡ Только слеш-команды.' });
   const musicChannel = await guild.channels.create({ name: '🎵・музыка', type: ChannelType.GuildText, parent: catService.id, topic: '🎧 /музыка <название>' });
   const voiceLogs = await guild.channels.create({ name: '📋・voice-logs', type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: [{ id: guild.id, deny: [P.ViewChannel] }, { id: botId, allow: [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory] }, { id: kingRole.id, allow: [P.ViewChannel] }] });
+  const messageLogs = await guild.channels.create({ name: '📝・message-logs', type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: [{ id: guild.id, deny: [P.ViewChannel] }, { id: botId, allow: [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory] }, { id: kingRole.id, allow: [P.ViewChannel] }] });
 
   // Voice category: управление (text, above voice) → Создать Комнату → Lobby → etc
   const roomControl = await guild.channels.create({ name: '🎮・управление', type: ChannelType.GuildText, parent: catVoice.id, permissionOverwrites: readOnly([{ id: kingRole.id, allow: [P.SendMessages] }]) });
@@ -96,6 +97,7 @@ export async function handleSetup(guild: Guild) {
   await welcomeChannel.send({ embeds: [new EmbedBuilder().setTitle('🔔 Участники').setDescription('Приветствия новых участников.').setColor(0x2ecc71)] });
   await anonymousChannel.send({ embeds: [new EmbedBuilder().setTitle('💗 Анонимки').setDescription('Нажми кнопку ниже и отправь анонимное сообщение.\nПолучатель будет **тегнут** и получит **ЛС от бота**.').setColor(0xec4899)], components: [anonRow] });
   try { await voiceLogs.send({ embeds: [new EmbedBuilder().setDescription('📋 **Voice-логи активны.**').setColor(0x5865f2).setTimestamp()] }); } catch {}
+  try { await messageLogs.send({ embeds: [new EmbedBuilder().setDescription('📝 **Message-логи активны.** Здесь будут удаления и изменения сообщений.').setColor(0xf39c12).setTimestamp()] }); } catch {}
 
   return { generalChat, voiceLogs, generator };
 }

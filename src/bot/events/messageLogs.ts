@@ -5,7 +5,7 @@ function findLogChannel(guildId: string): TextChannel | null {
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return null;
   const ch = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildText && c.name === '📋・voice-logs',
+    (c) => c.type === ChannelType.GuildText && c.name === '📝・message-logs',
   );
   return (ch as TextChannel) ?? null;
 }
