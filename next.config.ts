@@ -7,6 +7,8 @@ const externalBotPackages = [
   'opusscript',
   'play-dl',
   '@distube/ytdl-core',
+  'soundcloud-scraper',
+  'scdl-core',
   'yt-search',
   '@ffmpeg-installer/ffmpeg',
   '@ffmpeg-installer/linux-x64',

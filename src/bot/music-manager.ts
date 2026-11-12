@@ -3,35 +3,50 @@ import {
   createAudioPlayer, createAudioResource, entersState, joinVoiceChannel,
   type AudioPlayer, type VoiceConnection,
 } from '@discordjs/voice';
-import { Ytdl } from '@distube/ytdl-core';
 import type { ChatInputCommandInteraction, GuildTextBasedChannel, GuildMember } from 'discord.js';
-import yts from 'yt-search';
+import { createRequire } from 'module';
+
+const req = createRequire(import.meta.url);
+const SoundCloud = req('soundcloud-scraper');
+const scClient = new SoundCloud.Client();
 
 export type MusicTrack = { title: string; url: string; duration: string; thumbnail: string | null; author: string; requestedBy: string };
 type State = { guildId: string; voiceChannelId: string; textChannel: GuildTextBasedChannel; connection: VoiceConnection; player: AudioPlayer; queue: MusicTrack[]; current: MusicTrack | null };
 
 // Key = guildId:voiceChannelId — allows different songs in different voice channels
 const states = new Map<string, State>();
-const ytdl = new Ytdl();
 
-function stateKey(guildId: string, vcId: string) { return `${guildId}:${vcId}`; }
-function fmt(s: number) { if (!s || s <= 0) return '?'; const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60; return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`; }
+function stateKey(gid: string, vcId: string) { return `${gid}:${vcId}`; }
+function fmt(ms: number) { const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const sec = s % 60; return `${m}:${String(sec).padStart(2, '0')}`; }
 
 async function resolveTrack(query: string, requestedBy: string): Promise<MusicTrack> {
   const input = query.trim();
-  // Search YouTube specifically for MUSIC category
-  const results = await yts(input + ' music audio');
-  // Filter: prefer videos with "music" category hints, short duration (< 15min), and skip podcasts/lectures
-  const video = results.videos.filter(v => {
-    if (!v.seconds || v.seconds > 900) return false; // skip videos longer than 15 min
-    const title = (v.title || '').toLowerCase();
-    // skip obvious non-music
-    if (title.includes('podcast') || title.includes('lecture') || title.includes('tutorial') || title.includes('review')) return false;
-    return true;
-  })[0] || results.videos[0];
+
+  // If it's a SoundCloud URL — resolve directly
+  if (/soundcloud\.com\//.test(input)) {
+    const info = await scClient.getSongInfo(input);
+    return { title: info.title, url: info.url, duration: fmt(info.duration), thumbnail: info.thumbnail || null, author: info.author?.name || 'SoundCloud', requestedBy };
+  }
+
+  // Search SoundCloud
+  const results = await scClient.search(input, 'track');
+  if (!results || results.length === 0) throw new Error('Ничего не найдено на SoundCloud');
+
+  // Filter: max 6 minutes (360 seconds = 360000ms)
+  const MAX_MS = 6 * 60 * 1000;
   
-  if (!video) throw new Error('Ничего не найдено');
-  return { title: video.title, url: video.url, duration: video.timestamp || fmt(video.seconds ?? 0), thumbnail: video.thumbnail || null, author: video.author?.name || 'YouTube', requestedBy };
+  for (const r of results.slice(0, 10)) {
+    try {
+      const info = await scClient.getSongInfo(r.url);
+      if (info.duration <= MAX_MS) {
+        return { title: info.title, url: info.url, duration: fmt(info.duration), thumbnail: info.thumbnail || null, author: info.author?.name || 'SoundCloud', requestedBy };
+      }
+    } catch { /* try next */ }
+  }
+
+  // If nothing under 6min, take first result anyway
+  const info = await scClient.getSongInfo(results[0].url);
+  return { title: info.title, url: info.url, duration: fmt(info.duration), thumbnail: info.thumbnail || null, author: info.author?.name || 'SoundCloud', requestedBy };
 }
 
 async function send(s: State, c: string) { await s.textChannel.send(c).catch(() => {}); }
@@ -45,7 +60,8 @@ async function playNext(key: string) {
     return;
   }
   try {
-    const stream = ytdl.download(next.url, { filter: (f: any) => f.hasAudio && !f.hasVideo, quality: 'highestaudio', highWaterMark: 1 << 25 } as any);
+    const info = await scClient.getSongInfo(next.url);
+    const stream = await info.downloadProgressive();
     const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary, inlineVolume: true });
     resource.volume?.setVolume(0.8);
     s.player.play(resource);
@@ -66,7 +82,10 @@ function createState(member: GuildMember, interaction: ChatInputCommandInteracti
   player.on(AudioPlayerStatus.Idle, () => void playNext(key));
   player.on('error', (e) => { console.error('[music] Player error:', e.message); void send(s, `❌ ${e.message}`); s.current = null; void playNext(key); });
   connection.on('error', (e) => { console.error('[music] Voice error:', e.message); });
-  connection.on(VoiceConnectionStatus.Disconnected, async () => { try { await Promise.race([entersState(connection, VoiceConnectionStatus.Signalling, 5_000), entersState(connection, VoiceConnectionStatus.Connecting, 5_000)]); } catch { connection.destroy(); states.delete(key); } });
+  connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    try { await Promise.race([entersState(connection, VoiceConnectionStatus.Signalling, 5_000), entersState(connection, VoiceConnectionStatus.Connecting, 5_000)]); }
+    catch { connection.destroy(); states.delete(key); }
+  });
   states.set(key, s);
   return s;
 }
