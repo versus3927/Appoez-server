@@ -1,3 +1,4 @@
+import { loadYoutubeExtractor } from './youtube-loader';
 import { Events, ChatInputCommandInteraction, TextChannel } from 'discord.js';
 import { client, player } from './client';
 import { handleInteraction } from './events/interactionCreate';
@@ -29,14 +30,39 @@ export function startBot(): Promise<boolean> {
         }
 
         try {
+            // ── Load extractors ──
+            // 1. SoundCloud, Spotify, Vimeo, Attachment etc
             await player.extractors.loadMulti(DefaultExtractors);
-            console.log('[bot] Music extractors loaded.');
+
+            // 2. YouTube via discord-player-youtubei (not in DefaultExtractors!)
+            try {
+                const yt = loadYoutubeExtractor();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if (yt) { await player.extractors.register(yt.YoutubeExtractor as any, {}); }
+                console.log('[bot] ✅ YouTube extractor loaded (discord-player-youtubei).');
+            } catch (err) {
+                console.error('[bot] ⚠️ YouTube extractor failed to load:', err);
+                console.error('[bot] Music will only work with SoundCloud/direct URLs.');
+            }
+
+            console.log('[bot] All extractors loaded. Count:', player.extractors.size);
 
             // ── Player Events ──
             player.events.on('playerStart', (queue, track) => {
                 console.log(`[player] ▶️ Now playing: ${track.title}`);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
-                ch?.send(`▶️ Сейчас играет: **${track.title}**`).catch(() => {});
+                ch?.send({
+                    embeds: [{
+                        title: '▶️ Сейчас играет',
+                        description: `**[${track.title}](${track.url})**`,
+                        color: 0x8B5CF6,
+                        thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+                        fields: [
+                            { name: '👤 Автор', value: track.author || '?', inline: true },
+                            { name: '⏱️ Длительность', value: track.duration || '?', inline: true },
+                        ],
+                    }]
+                }).catch(() => {});
             });
 
             player.events.on('playerFinish', (_queue, track) => {
@@ -46,7 +72,7 @@ export function startBot(): Promise<boolean> {
             player.events.on('emptyQueue', (queue) => {
                 console.log('[player] 📭 Queue empty.');
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
-                ch?.send('📭 Очередь закончилась.').catch(() => {});
+                ch?.send('📭 Очередь закончилась. До скорой встречи!').catch(() => {});
             });
 
             player.events.on('emptyChannel', () => {
@@ -58,20 +84,24 @@ export function startBot(): Promise<boolean> {
             });
 
             player.events.on('error', (queue, error) => {
-                console.error('[player] ❌ Queue error:', error);
+                console.error('[player] ❌ Queue error:', error.message);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
                 ch?.send(`❌ Ошибка: ${error.message}`).catch(() => {});
             });
 
             player.events.on('playerError', (queue, error, track) => {
-                console.error(`[player] ❌ Error on "${track.title}":`, error);
+                console.error(`[player] ❌ Error on "${track.title}":`, error.message);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
                 ch?.send(`❌ Ошибка при воспроизведении **${track.title}**: ${error.message}`).catch(() => {});
             });
 
+            player.events.on('debug', (_queue, msg) => {
+                console.log('[player:debug]', msg);
+            });
+
             // ── Discord Client Events ──
             client.once(Events.ClientReady, (readyClient) => {
-                console.log(`[bot] Logged in as ${readyClient.user.tag}`);
+                console.log(`[bot] ✅ Logged in as ${readyClient.user.tag}`);
                 void deployCommands().catch((error) =>
                     console.error('[bot] Failed to deploy slash commands:', error)
                 );
