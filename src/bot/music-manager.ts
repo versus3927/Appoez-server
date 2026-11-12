@@ -120,20 +120,27 @@ async function playNext(key: string): Promise<void> {
     setTimeout(() => {
       const current = states.get(key);
       if (!current || current.current || current.queue.length > 0) return;
+      // Destroy connection — this triggers the Disconnected handler which releases the agent
       current.player.stop(true);
       current.connection.destroy();
+      // Release here too in case Disconnected doesn't fire
       releaseMusicAgent(current.agentUserId);
       markChannelFree(current.guildId, current.voiceChannelId);
       states.delete(key);
-    }, 10_000);
+      console.log('[music] Released agent after queue timeout:', current.agentTag);
+    }, 30_000);
     return;
   }
 
   try {
     const info = await scClient.getSongInfo(next.url);
     const stream = await info.downloadHLS();
-    const resource = createAudioResource(stream, {
-      inputType: StreamType.Arbitrary,
+    
+    // Use demuxProbe to detect the correct stream type
+    const { demuxProbe } = await import('@discordjs/voice');
+    const probeResult = await demuxProbe(stream);
+    const resource = createAudioResource(probeResult.stream, {
+      inputType: probeResult.type,
       inlineVolume: true,
     });
     resource.volume?.setVolume(0.8);
