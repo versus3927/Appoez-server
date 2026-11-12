@@ -20,7 +20,8 @@ export async function handlePlay(interaction: ChatInputCommandInteraction) {
                 volume: 80,
                 leaveOnEmpty: true,
                 leaveOnEmptyCooldown: 30_000,
-                leaveOnEnd: false, // Don't leave immediately — keep queue alive
+                leaveOnEnd: false,
+                bufferingTimeout: 15_000,
             },
             requestedBy: interaction.user,
         });
@@ -67,7 +68,7 @@ export async function handleStop(interaction: ChatInputCommandInteraction) {
 
 export async function handleQueue(interaction: ChatInputCommandInteraction) {
     const queue: GuildQueue | null = useQueue(interaction.guildId!);
-    if (!queue || (queue.isEmpty() && !queue.currentTrack)) {
+    if (!queue || (!queue.currentTrack && queue.isEmpty())) {
         return interaction.reply({ content: '📭 Очередь пуста.', ephemeral: true });
     }
 

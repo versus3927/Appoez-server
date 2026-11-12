@@ -30,22 +30,16 @@ export function startBot(): Promise<boolean> {
         }
 
         try {
-            // ── Load extractors ──
-            // 1. SoundCloud, Spotify, Vimeo, Attachment etc
             await player.extractors.loadMulti(DefaultExtractors);
 
-            // 2. YouTube via discord-player-youtubei (not in DefaultExtractors!)
             try {
                 const yt = loadYoutubeExtractor();
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 if (yt) { await player.extractors.register(yt.YoutubeExtractor as any, {}); }
-                console.log('[bot] ✅ YouTube extractor loaded (discord-player-youtubei).');
+                console.log('[bot] ✅ YouTube extractor loaded.');
             } catch (err) {
-                console.error('[bot] ⚠️ YouTube extractor failed to load:', err);
-                console.error('[bot] Music will only work with SoundCloud/direct URLs.');
+                console.error('[bot] ⚠️ YouTube extractor failed:', err);
             }
-
-            console.log('[bot] All extractors loaded. Count:', player.extractors.size);
 
             // ── Player Events ──
             player.events.on('playerStart', (queue, track) => {
@@ -65,41 +59,25 @@ export function startBot(): Promise<boolean> {
                 }).catch(() => {});
             });
 
-            player.events.on('playerFinish', (_queue, track) => {
-                console.log(`[player] ✅ Finished: ${track.title}`);
-            });
-
             player.events.on('emptyQueue', (queue) => {
                 console.log('[player] 📭 Queue empty.');
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
                 ch?.send('📭 Очередь закончилась. До скорой встречи!').catch(() => {});
             });
 
-            player.events.on('emptyChannel', () => {
-                console.log('[player] 👻 Channel empty, leaving.');
-            });
-
-            player.events.on('disconnect', () => {
-                console.log('[player] 🔌 Disconnected.');
-            });
-
             player.events.on('error', (queue, error) => {
                 console.error('[player] ❌ Queue error:', error.message);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
-                ch?.send(`❌ Ошибка: ${error.message}`).catch(() => {});
+                ch?.send(`❌ Ошибка очереди: ${error.message}`).catch(() => {});
             });
 
             player.events.on('playerError', (queue, error, track) => {
-                console.error(`[player] ❌ Error on "${track.title}":`, error.message);
+                console.error(`[player] ❌ Stream error on "${track.title}":`, error.message);
                 const ch = getTextChannel(queue.metadata as ChatInputCommandInteraction | undefined);
-                ch?.send(`❌ Ошибка при воспроизведении **${track.title}**: ${error.message}`).catch(() => {});
+                ch?.send(`❌ Ошибка потока при воспроизведении **${track.title}**: ${error.message}`).catch(() => {});
             });
 
-            player.events.on('debug', (_queue, msg) => {
-                console.log('[player:debug]', msg);
-            });
-
-            // ── Discord Client Events ──
+            // ── Client Events ──
             client.once(Events.ClientReady, (readyClient) => {
                 console.log(`[bot] ✅ Logged in as ${readyClient.user.tag}`);
                 void deployCommands().catch((error) =>
