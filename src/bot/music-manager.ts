@@ -127,7 +127,7 @@ async function playNext(key: string): Promise<void> {
 
   try {
     const info = await scClient.getSongInfo(next.url);
-    const stream = await info.downloadProgressive();
+    const stream = await info.downloadHLS();
     const resource = createAudioResource(stream, {
       inputType: StreamType.Arbitrary,
       inlineVolume: true,
