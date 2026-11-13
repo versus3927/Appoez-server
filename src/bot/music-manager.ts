@@ -172,14 +172,12 @@ async function playNext(key: string): Promise<void> {
       quality: 'lowestaudio',
     });
 
-    // Pipe through ffmpeg to convert to Ogg/Opus for Discord
+    // Pipe through ffmpeg to convert to raw PCM for Discord voice
     const ffmpegProcess = spawn(getFfmpegPath(), [
       '-i', 'pipe:0',
-      '-analyzeduration', '0',
-      '-loglevel', '0',
-      '-f', 'opus',
-      '-c:a', 'libopus',
-      '-b:a', '96k',
+      '-vn',
+      '-loglevel', 'error',
+      '-f', 's16le',
       '-ar', '48000',
       '-ac', '2',
       'pipe:1',
@@ -195,10 +193,16 @@ async function playNext(key: string): Promise<void> {
       ffmpegProcess.stdin.end();
     });
     ffmpegProcess.stdin.on('error', () => { /* ignore broken pipe */ });
-    ffmpegProcess.stderr.on('data', () => { /* silence ffmpeg stderr */ });
+    ffmpegProcess.stderr.on('data', (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) console.error('[music] ffmpeg:', text);
+    });
+    ffmpegProcess.on('exit', (code, signal) => {
+      console.log('[music] ffmpeg exit:', { code, signal, track: next.title });
+    });
 
     const resource = createAudioResource(ffmpegProcess.stdout, {
-      inputType: StreamType.OggOpus,
+      inputType: StreamType.Raw,
       inlineVolume: true,
     });
     resource.volume?.setVolume(0.8);
