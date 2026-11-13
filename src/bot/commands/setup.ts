@@ -8,6 +8,13 @@ export async function handleSetup(guild: Guild) {
   const botId = guild.client.user!.id;
   const P = PermissionFlagsBits;
 
+  // Helper: check if channel exists, otherwise create
+  async function getOrCreateChannel(name: string, options: any) {
+    const existing = guild.channels.cache.find(c => c.name === name && c.type === options.type);
+    if (existing) return existing as any;
+    return await guild.channels.create({ name, ...options });
+  }
+
   // Helper: readonly for everyone, bot can send
   const readOnly = (extra: any[] = []) => [
     { id: guild.id, deny: [P.SendMessages] },
@@ -35,38 +42,55 @@ export async function handleSetup(guild: Guild) {
   const kingRole = createdStaff[0];
 
   // ── CATEGORIES ──
-  const catWelcome = await guild.channels.create({ name: '🧊・Welcome', type: ChannelType.GuildCategory });
-  const catChat = await guild.channels.create({ name: '🤍・Общение', type: ChannelType.GuildCategory });
-  const catInteresting = await guild.channels.create({ name: '🍀・Интересное', type: ChannelType.GuildCategory });
-  const catService = await guild.channels.create({ name: '🛠️・Сервис', type: ChannelType.GuildCategory });
-  const catVoice = await guild.channels.create({ name: '🎧・Голосовые', type: ChannelType.GuildCategory });
+  const catWelcome = await getOrCreateChannel('🧊・Welcome', { type: ChannelType.GuildCategory });
+  const catChat = await getOrCreateChannel('🤍・Общение', { type: ChannelType.GuildCategory });
+  const catInteresting = await getOrCreateChannel('🍀・Интересное', { type: ChannelType.GuildCategory });
+  const catService = await getOrCreateChannel('🛠️・Сервис', { type: ChannelType.GuildCategory });
+  const catVoice = await getOrCreateChannel('🎧・Голосовые', { type: ChannelType.GuildCategory });
 
   // ── CHANNELS ──
-  // Welcome (readonly)
-  const welcomeChannel = await guild.channels.create({ name: '🔔・участники', type: ChannelType.GuildText, parent: catWelcome.id, permissionOverwrites: readOnly() });
+  const welcomeChannel = await getOrCreateChannel('🔔・участники', { type: ChannelType.GuildText, parent: catWelcome.id, permissionOverwrites: readOnly() });
+  const generalChat = await getOrCreateChannel('💬・чатик', { type: ChannelType.GuildText, parent: catChat.id });
+  const mediaChannel = await getOrCreateChannel('💞・медиа', { type: ChannelType.GuildText, parent: catInteresting.id });
+  const anonymousChannel = await getOrCreateChannel('💗・анонимки', { type: ChannelType.GuildText, parent: catInteresting.id, permissionOverwrites: readOnly() });
 
-  // Chat (people CAN write here)
-  const generalChat = await guild.channels.create({ name: '💬・чатик', type: ChannelType.GuildText, parent: catChat.id });
-
-  // Interesting
-  const mediaChannel = await guild.channels.create({ name: '💞・медиа', type: ChannelType.GuildText, parent: catInteresting.id });
-  const anonymousChannel = await guild.channels.create({ name: '💗・анонимки', type: ChannelType.GuildText, parent: catInteresting.id, permissionOverwrites: readOnly() });
-  try { await guild.channels.create({ name: '💡・идеи', type: ChannelType.GuildForum, parent: catInteresting.id, defaultForumLayout: ForumLayoutType.ListView, availableTags: [{ name: '💡 Идея!', moderated: false }, { name: '❤️ Стикер', moderated: false }, { name: '✅ Выполнено', moderated: true }, { name: '🐛 Баг', moderated: false }] }); } catch { await guild.channels.create({ name: '💡・идеи', type: ChannelType.GuildText, parent: catInteresting.id }); }
+  try {
+    const existing = guild.channels.cache.find(c => c.name === '💡・идеи' && (c.type === ChannelType.GuildForum || c.type === ChannelType.GuildText));
+    if (!existing) {
+      await guild.channels.create({
+        name: '💡・идеи',
+        type: ChannelType.GuildForum,
+        parent: catInteresting.id,
+        defaultForumLayout: ForumLayoutType.ListView,
+        availableTags: [
+          { name: '💡 Идея!', moderated: false },
+          { name: '❤️ Стикер', moderated: false },
+          { name: '✅ Выполнено', moderated: true },
+          { name: '🐛 Баг', moderated: false }
+        ]
+      });
+    }
+  } catch {
+    await getOrCreateChannel('💡・идеи', { type: ChannelType.GuildText, parent: catInteresting.id });
+  }
 
   // Service (all readonly)
-  const rulesChannel = await guild.channels.create({ name: '📌・правила', type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: readOnly() });
-  const commandsChannel = await guild.channels.create({ name: '🤖・команды', type: ChannelType.GuildText, parent: catService.id, topic: '⚡ Только слеш-команды.' });
-  const musicChannel = await guild.channels.create({ name: '🎵・музыка', type: ChannelType.GuildText, parent: catService.id, topic: '🎧 /музыка <название>' });
-  const voiceLogs = await guild.channels.create({ name: '📋・voice-logs', type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: [{ id: guild.id, deny: [P.ViewChannel] }, { id: botId, allow: [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory] }, { id: kingRole.id, allow: [P.ViewChannel] }] });
-  const messageLogs = await guild.channels.create({ name: '📝・message-logs', type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: [{ id: guild.id, deny: [P.ViewChannel] }, { id: botId, allow: [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory] }, { id: kingRole.id, allow: [P.ViewChannel] }] });
+  const rulesChannel = await getOrCreateChannel('📌・правила', { type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: readOnly() });
+  const commandsChannel = await getOrCreateChannel('🤖・команды', { type: ChannelType.GuildText, parent: catService.id, topic: '⚡ Только слеш-команды.' });
+  const musicChannel = await getOrCreateChannel('🎵・музыка', { type: ChannelType.GuildText, parent: catService.id, topic: '🎧 /музыка <название>' });
+  const voiceLogs = await getOrCreateChannel('📋・voice-logs', { type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: [{ id: guild.id, deny: [P.ViewChannel] }, { id: botId, allow: [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory] }, { id: kingRole.id, allow: [P.ViewChannel] }] });
+  const messageLogs = await getOrCreateChannel('📝・message-logs', { type: ChannelType.GuildText, parent: catService.id, permissionOverwrites: [{ id: guild.id, deny: [P.ViewChannel] }, { id: botId, allow: [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory] }, { id: kingRole.id, allow: [P.ViewChannel] }] });
 
   // Voice category: управление (text, above voice) → Создать Комнату → Lobby → etc
-  const roomControl = await guild.channels.create({ name: '🎮・управление', type: ChannelType.GuildText, parent: catVoice.id, permissionOverwrites: readOnly([{ id: kingRole.id, allow: [P.SendMessages] }]) });
-  const generator = await guild.channels.create({ name: '➕ Создать Комнату', type: ChannelType.GuildVoice, parent: catVoice.id });
-  await guild.channels.create({ name: '🔊 Lobby', type: ChannelType.GuildVoice, parent: catVoice.id });
-  for (let i = 1; i <= 4; i++) await guild.channels.create({ name: `🔉 Лобби #${i}`, type: ChannelType.GuildVoice, userLimit: 30, parent: catVoice.id });
-  await guild.channels.create({ name: '🎧 Музыка', type: ChannelType.GuildVoice, parent: catVoice.id });
-  await guild.channels.create({ name: '🎲 Игры', type: ChannelType.GuildVoice, parent: catVoice.id });
+  const roomControl = await getOrCreateChannel('🎮・управление', { type: ChannelType.GuildText, parent: catVoice.id, permissionOverwrites: readOnly([{ id: kingRole.id, allow: [P.SendMessages] }]) });
+  const generator = await getOrCreateChannel('➕ Создать Комнату', { type: ChannelType.GuildVoice, parent: catVoice.id });
+
+  await getOrCreateChannel('🔊 Lobby', { type: ChannelType.GuildVoice, parent: catVoice.id });
+  for (let i = 1; i <= 4; i++) {
+    await getOrCreateChannel(`🔉 Лобби #${i}`, { type: ChannelType.GuildVoice, userLimit: 30, parent: catVoice.id });
+  }
+  await getOrCreateChannel('🎧 Музыка', { type: ChannelType.GuildVoice, parent: catVoice.id });
+  await getOrCreateChannel('🎲 Игры', { type: ChannelType.GuildVoice, parent: catVoice.id });
 
   // ── CONFIG ──
   const cfg = { guildId: guild.id, logsChannelId: voiceLogs.id, generatorChannelId: generator.id, categoryId: catVoice.id, welcomeChannelId: welcomeChannel.id, commandsChannelId: commandsChannel.id, musicChannelId: musicChannel.id };
