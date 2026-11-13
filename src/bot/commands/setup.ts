@@ -92,8 +92,8 @@ export async function handleSetup(guild: Guild) {
 
   await roomControl.send({ embeds: [new EmbedBuilder().setTitle('🏠 Приватная комната').setDescription('Зайди в **➕ Создать Комнату**\n\n✏️ название · 🔒 закрыть · 🚫 бан · ⚡ кик\n👥 лимит · 👁️ скрыть · 🎙️ мут · ℹ️ инфо').setColor(0x8b5cf6)], components: [row1, row2] });
   await rulesChannel.send({ embeds: [new EmbedBuilder().setTitle('📌 Правила').setDescription('**1.** Уважай других\n**2.** Не спамь\n**3.** Не оскорбляй\n**4.** Реклама запрещена\n**5.** Слушайся админов').setColor(0xf59e0b)] });
-  await commandsChannel.send({ embeds: [new EmbedBuilder().setTitle('🤖 Команды').setDescription('`/музыка` · `/скип` · `/стоп` · `/очередь`\n`/анон` · `/стата` · `/ролл` · `/шар` · `/аватар`\n\nЕсли хочешь несколько музыкальных ботов — задай переменную `MUSIC_BOT_TOKENS` в Railway (токены через запятую или с новой строки).').setColor(0x5865f2)] });
-  await musicChannel.send({ embeds: [new EmbedBuilder().setTitle('🎵 Музыка').setDescription('Зайди в 🎧 **Музыка** и напиши `/музыка <название>`\n\nПоиск идёт **только по SoundCloud**, максимум **6 минут**.').setColor(0xe040fb)] });
+  await commandsChannel.send({ embeds: [new EmbedBuilder().setTitle('🤖 Команды').setDescription('`/музыка` · `/скип` · `/стоп` · `/очередь`\n`/анон` · `/стата` · `/ролл` · `/шар` · `/аватар`').setColor(0x5865f2)] });
+  await musicChannel.send({ embeds: [new EmbedBuilder().setTitle('🎵 Музыка').setDescription('Зайди в 🎧 **Музыка** и напиши `/музыка <название>`\n\nПоиск музыки в SoundCloud.').setColor(0xe040fb)] });
   await welcomeChannel.send({ embeds: [new EmbedBuilder().setTitle('🔔 Участники').setDescription('Приветствия новых участников.').setColor(0x2ecc71)] });
   await anonymousChannel.send({ embeds: [new EmbedBuilder().setTitle('💗 Анонимки').setDescription('Нажми кнопку ниже и отправь анонимное сообщение.\nПолучатель будет **тегнут** и получит **ЛС от бота**.').setColor(0xec4899)], components: [anonRow] });
   try { await voiceLogs.send({ embeds: [new EmbedBuilder().setDescription('📋 **Voice-логи активны.**').setColor(0x5865f2).setTimestamp()] }); } catch {}

@@ -116,7 +116,7 @@ async function playNext(key: string): Promise<void> {
   state.current = next;
 
   if (!next) {
-    await send(state, `📭 Очередь закончилась. Музыкальный бот **${state.agentTag}** освобождён.`);
+    await send(state, `📭 Очередь закончилась.`);
     setTimeout(() => {
       const current = states.get(key);
       if (!current || current.current || current.queue.length > 0) return;
@@ -145,7 +145,7 @@ async function playNext(key: string): Promise<void> {
     });
     resource.volume?.setVolume(0.8);
     state.player.play(resource);
-    await send(state, `▶️ Сейчас играет: **${next.title}** — ${next.duration} • Бот: **${state.agentTag}**`);
+    await send(state, `▶️ Сейчас играет: **${next.title}** — ${next.duration}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[music] Stream error:', message);

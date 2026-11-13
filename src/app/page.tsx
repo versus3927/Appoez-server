@@ -228,7 +228,7 @@ export default async function DashboardPage() {
             hint={
               bot.ready
                 ? `серверов: ${bot.guilds}`
-                : "проверьте DISCORD_TOKEN"
+                : "Ожидание..."
             }
           />
           <MetricCard
@@ -239,8 +239,8 @@ export default async function DashboardPage() {
               dbOk
                 ? `запрос за ${latencyMs} мс`
                 : dbConfigured
-                  ? "см. панель ниже"
-                  : "DATABASE_URL"
+                  ? "Проблемы с БД"
+                  : "Настройка..."
             }
           />
           <MetricCard
@@ -251,9 +251,9 @@ export default async function DashboardPage() {
           />
           <MetricCard
             icon={Gauge}
-            label="Runtime"
-            value={`Node ${process.version}`}
-            hint={process.env.NODE_ENV ?? "development"}
+            label="Статус"
+            value="Активен"
+            hint="Система работает"
           />
         </section>
 
@@ -347,9 +347,9 @@ export default async function DashboardPage() {
             </p>
             <ol className="mt-5 space-y-3.5 text-sm leading-relaxed text-zinc-300">
               {[
-                "Railway → Variables: добавьте DATABASE_URL как reference ${{ Postgres.DATABASE_URL }} и сделайте Redeploy.",
-                "Если переменная задана, а таблицы нет — примените схему: DATABASE_URL=<public-url> npx drizzle-kit push.",
-                "Проверьте /api/health — там живой статус базы и бота в JSON.",
+                "Обратитесь к администратору для проверки переменных окружения.",
+                "Проверьте работоспособность базы данных.",
+                "Попробуйте перезагрузить страницу через несколько минут.",
               ].map((step, index) => (
                 <li key={index} className="flex gap-3.5">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full border border-amber-300/25 bg-amber-300/10 font-mono text-[11px] font-semibold text-amber-200">
@@ -388,7 +388,7 @@ export default async function DashboardPage() {
           </div>
           <span className="flex items-center gap-2">
             <Server className="size-3.5" strokeWidth={1.8} />
-            порт {process.env.PORT ?? "3000"}
+            Community Edition
           </span>
         </footer>
       </div>
