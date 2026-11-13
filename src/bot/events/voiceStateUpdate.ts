@@ -88,10 +88,15 @@ export async function handleVoiceStateUpdate(oldState: VoiceState, newState: Voi
 
   if (newChannelId && generatorChannelId && newChannelId === generatorChannelId) {
     try {
+      // Determine position: right after the generator channel
+      const generatorChannel = guild.channels.cache.get(generatorChannelId);
+      const position = (generatorChannel && 'position' in generatorChannel) ? generatorChannel.position + 1 : undefined;
+
       const room = await guild.channels.create({
         name: `🏠・${member.displayName}`,
         type: ChannelType.GuildVoice,
         parent: privateRoomCategoryId || undefined,
+        position,
         permissionOverwrites: [
           {
             id: member.id,

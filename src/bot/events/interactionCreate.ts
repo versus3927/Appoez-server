@@ -211,7 +211,7 @@ export async function handleInteraction(interaction: Interaction) {
   }
 
   if (interaction.isModalSubmit()) {
-    const { customId, guild, channelId } = interaction;
+    const { customId, guild } = interaction;
 
     if (customId === 'modal_anon_send') {
       let targetInput = interaction.fields.getTextInputValue('anon_target').trim();
@@ -241,11 +241,30 @@ export async function handleInteraction(interaction: Interaction) {
       }
     }
 
+    // ── Helper: find the user's private voice channel ──
+    const findUserRoom = async () => {
+      if (!guild) return null;
+      const guildMember = await guild.members.fetch(interaction.user.id).catch(() => null);
+      const voiceChannelId = guildMember?.voice?.channelId;
+      if (!voiceChannelId) return null;
+
+      // Verify it's a private room
+      let room = null;
+      try { room = await db.query.privateRooms.findFirst({ where: eq(privateRooms.channelId, voiceChannelId) }); } catch {}
+      if (!room) room = getPrivateRoom(voiceChannelId);
+      if (!room || room.ownerId !== interaction.user.id) return null;
+
+      const channel = guild.channels.cache.get(voiceChannelId);
+      if (!channel || channel.type !== ChannelType.GuildVoice) return null;
+      return channel;
+    };
+
     if (customId === 'modal_room_rename') {
       const newName = interaction.fields.getTextInputValue('new_name');
       try {
-        const channel = guild?.channels.cache.get(channelId!) as any;
-        await channel?.setName(newName);
+        const channel = await findUserRoom();
+        if (!channel) return interaction.reply({ content: '❌ Зайдите в свою приватную комнату.', ephemeral: true });
+        await channel.setName(newName);
         return interaction.reply({ content: `✏️ Название изменено: **${newName}**`, ephemeral: true });
       } catch {
         return interaction.reply({ content: '❌ Не удалось изменить название.', ephemeral: true });
@@ -258,8 +277,9 @@ export async function handleInteraction(interaction: Interaction) {
         return interaction.reply({ content: '❌ Лимит должен быть от 0 до 99.', ephemeral: true });
       }
       try {
-        const channel = guild?.channels.cache.get(channelId!) as any;
-        await channel?.setUserLimit(limit);
+        const channel = await findUserRoom();
+        if (!channel) return interaction.reply({ content: '❌ Зайдите в свою приватную комнату.', ephemeral: true });
+        await channel.setUserLimit(limit);
         return interaction.reply({ content: limit === 0 ? '👥 Лимит снят' : `👥 Лимит: **${limit}**`, ephemeral: true });
       } catch {
         return interaction.reply({ content: '❌ Не удалось изменить лимит.', ephemeral: true });
@@ -269,9 +289,10 @@ export async function handleInteraction(interaction: Interaction) {
     if (customId === 'modal_room_ban') {
       const targetId = interaction.fields.getTextInputValue('ban_user_id').trim();
       try {
-        const channel = guild?.channels.cache.get(channelId!) as any;
-        await channel?.permissionOverwrites.edit(targetId, { Connect: false, ViewChannel: false });
-        const targetMember = channel?.members?.get(targetId);
+        const channel = await findUserRoom();
+        if (!channel) return interaction.reply({ content: '❌ Зайдите в свою приватную комнату.', ephemeral: true });
+        await channel.permissionOverwrites.edit(targetId, { Connect: false, ViewChannel: false });
+        const targetMember = channel.members?.get(targetId);
         if (targetMember) await targetMember.voice.disconnect();
         return interaction.reply({ content: `🚫 Пользователь <@${targetId}> забанен в комнате.`, ephemeral: true });
       } catch {
@@ -282,8 +303,9 @@ export async function handleInteraction(interaction: Interaction) {
     if (customId === 'modal_room_kick') {
       const targetId = interaction.fields.getTextInputValue('kick_user_id').trim();
       try {
-        const channel = guild?.channels.cache.get(channelId!) as any;
-        const targetMember = channel?.members?.get(targetId);
+        const channel = await findUserRoom();
+        if (!channel) return interaction.reply({ content: '❌ Зайдите в свою приватную комнату.', ephemeral: true });
+        const targetMember = channel.members?.get(targetId);
         if (!targetMember) {
           return interaction.reply({ content: '❌ Пользователь не в этом канале.', ephemeral: true });
         }
@@ -297,8 +319,9 @@ export async function handleInteraction(interaction: Interaction) {
     if (customId === 'modal_room_mute') {
       const targetId = interaction.fields.getTextInputValue('mute_user_id').trim();
       try {
-        const channel = guild?.channels.cache.get(channelId!) as any;
-        const targetMember = channel?.members?.get(targetId);
+        const channel = await findUserRoom();
+        if (!channel) return interaction.reply({ content: '❌ Зайдите в свою приватную комнату.', ephemeral: true });
+        const targetMember = channel.members?.get(targetId);
         if (!targetMember) {
           return interaction.reply({ content: '❌ Пользователь не в этом канале.', ephemeral: true });
         }
