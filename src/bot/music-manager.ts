@@ -70,53 +70,61 @@ function fmtSeconds(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-const MAX_DURATION_SEC = 10 * 60; // 10 minutes
+const MAX_DURATION_SEC = 4 * 60 * 60; // 4 hours
 
 async function resolveTrack(query: string, requestedBy: string): Promise<MusicTrack> {
   const input = query.trim();
   const ytdl = getYtdl();
 
-  // Direct YouTube URL
-  if (/(?:youtube\.com|youtu\.be)\//i.test(input)) {
-    const info = await ytdl.getInfo(input);
+  const toTrack = (info: any, fallbackUrl: string): MusicTrack => {
     const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
-    if (dur > MAX_DURATION_SEC) throw new Error(`Трек слишком длинный (${fmtSeconds(dur)}). Максимум ${MAX_DURATION_SEC / 60} минут.`);
     return {
       title: info.videoDetails?.title ?? 'Без названия',
-      url: info.videoDetails?.video_url ?? input,
-      duration: fmtSeconds(dur),
+      url: info.videoDetails?.video_url ?? fallbackUrl,
+      duration: dur > 0 ? fmtSeconds(dur) : '??:??',
       thumbnail: info.videoDetails?.thumbnails?.[0]?.url ?? null,
       author: info.videoDetails?.author?.name ?? 'YouTube',
       requestedBy,
     };
+  };
+
+  // Direct YouTube URL
+  if (/(?:youtube\.com|youtu\.be)\//i.test(input)) {
+    const info = await ytdl.getInfo(input);
+    const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+    if (dur <= 0) throw new Error('Не удалось определить длительность трека.');
+    if (dur > MAX_DURATION_SEC) throw new Error(`Трек слишком длинный (${fmtSeconds(dur)}).`);
+    return toTrack(info, input);
   }
 
-  // Search YouTube
-  const results = await ytdl.search(input);
-  const items: any[] = Array.isArray(results) ? results : (results?.items ?? Object.values(results));
-  if (!items?.length) throw new Error('Ничего не найдено.');
+  const tried = new Set<string>();
+  const queries = [input, `${input} audio`, `${input} official audio`, `${input} song`];
 
-  for (const item of items.slice(0, 10)) {
-    try {
-      const videoUrl = item.url ?? `https://www.youtube.com/watch?v=${item.id}`;
-      const info = await ytdl.getInfo(videoUrl);
-      const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
-      if (dur > 0 && dur <= MAX_DURATION_SEC) {
-        return {
-          title: info.videoDetails?.title ?? item.title ?? 'Без названия',
-          url: info.videoDetails?.video_url ?? videoUrl,
-          duration: fmtSeconds(dur),
-          thumbnail: info.videoDetails?.thumbnails?.[0]?.url ?? null,
-          author: info.videoDetails?.author?.name ?? 'YouTube',
-          requestedBy,
-        };
+  for (const searchQuery of queries) {
+    const results = await ytdl.search(searchQuery);
+    const items: any[] = Array.isArray(results) ? results : (results?.items ?? Object.values(results));
+    if (!items?.length) continue;
+
+    for (const item of items.slice(0, 25)) {
+      try {
+        const videoUrl = item.url ?? `https://www.youtube.com/watch?v=${item.id}`;
+        if (!videoUrl || tried.has(videoUrl)) continue;
+        tried.add(videoUrl);
+
+        const info = await ytdl.getInfo(videoUrl);
+        const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+        const isLive = Boolean(info.videoDetails?.isLiveContent) || dur <= 0;
+        if (isLive) continue;
+        if (dur > MAX_DURATION_SEC) continue;
+
+        return toTrack(info, videoUrl);
+      } catch {
+        // try next result
       }
-    } catch {
-      // try next result
     }
   }
 
-  throw new Error(`Не найдено треков короче ${MAX_DURATION_SEC / 60} минут.`);
+  throw new Error('Не удалось найти подходящий трек. Попробуй точнее написать название или вставить ссылку.');
 }
 
 function getFfmpegPath(): string {
