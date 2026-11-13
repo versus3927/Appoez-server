@@ -23,10 +23,16 @@ import {
   markChannelOccupied,
 } from './music-bot-pool';
 import { createRequire } from 'module';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 
 const req = createRequire(import.meta.url);
-const SoundCloud = req('soundcloud-scraper');
-const scClient = new SoundCloud.Client();
+const { Ytdl } = req('@distube/ytdl-core');
+
+let ytdlInstance: any = null;
+function getYtdl() {
+  if (!ytdlInstance) ytdlInstance = new Ytdl();
+  return ytdlInstance;
+}
 
 export type MusicTrack = {
   title: string;
@@ -49,6 +55,7 @@ type State = {
   current: MusicTrack | null;
   agentUserId: string | null;
   agentTag: string;
+  ffmpeg: ChildProcessWithoutNullStreams | null;
 };
 
 const states = new Map<string, State>();
@@ -57,42 +64,50 @@ function stateKey(guildId: string, voiceChannelId: string) {
   return `${guildId}:${voiceChannelId}`;
 }
 
-function fmt(ms: number) {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return `${minutes}:${String(rest).padStart(2, '0')}`;
+function fmtSeconds(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
+
+const MAX_DURATION_SEC = 10 * 60; // 10 minutes
 
 async function resolveTrack(query: string, requestedBy: string): Promise<MusicTrack> {
   const input = query.trim();
+  const ytdl = getYtdl();
 
-  if (/soundcloud\.com\//i.test(input)) {
-    const info = await scClient.getSongInfo(input);
+  // Direct YouTube URL
+  if (/(?:youtube\.com|youtu\.be)\//i.test(input)) {
+    const info = await ytdl.getInfo(input);
+    const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+    if (dur > MAX_DURATION_SEC) throw new Error(`Трек слишком длинный (${fmtSeconds(dur)}). Максимум ${MAX_DURATION_SEC / 60} минут.`);
     return {
-      title: info.title,
-      url: info.url,
-      duration: fmt(info.duration),
-      thumbnail: info.thumbnail || null,
-      author: info.author?.name || 'SoundCloud',
+      title: info.videoDetails?.title ?? 'Без названия',
+      url: info.videoDetails?.video_url ?? input,
+      duration: fmtSeconds(dur),
+      thumbnail: info.videoDetails?.thumbnails?.[0]?.url ?? null,
+      author: info.videoDetails?.author?.name ?? 'YouTube',
       requestedBy,
     };
   }
 
-  const results = await scClient.search(input, 'track');
-  if (!results?.length) throw new Error('Ничего не найдено на SoundCloud');
+  // Search YouTube
+  const results = await ytdl.search(input);
+  const items: any[] = Array.isArray(results) ? results : (results?.items ?? Object.values(results));
+  if (!items?.length) throw new Error('Ничего не найдено.');
 
-  const MAX_MS = 6 * 60 * 1000;
-  for (const result of results.slice(0, 10)) {
+  for (const item of items.slice(0, 10)) {
     try {
-      const info = await scClient.getSongInfo(result.url);
-      if (info.duration <= MAX_MS) {
+      const videoUrl = item.url ?? `https://www.youtube.com/watch?v=${item.id}`;
+      const info = await ytdl.getInfo(videoUrl);
+      const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+      if (dur > 0 && dur <= MAX_DURATION_SEC) {
         return {
-          title: info.title,
-          url: info.url,
-          duration: fmt(info.duration),
-          thumbnail: info.thumbnail || null,
-          author: info.author?.name || 'SoundCloud',
+          title: info.videoDetails?.title ?? item.title ?? 'Без названия',
+          url: info.videoDetails?.video_url ?? videoUrl,
+          duration: fmtSeconds(dur),
+          thumbnail: info.videoDetails?.thumbnails?.[0]?.url ?? null,
+          author: info.videoDetails?.author?.name ?? 'YouTube',
           requestedBy,
         };
       }
@@ -101,7 +116,11 @@ async function resolveTrack(query: string, requestedBy: string): Promise<MusicTr
     }
   }
 
-  throw new Error('На SoundCloud не найдено треков короче 6 минут');
+  throw new Error(`Не найдено треков короче ${MAX_DURATION_SEC / 60} минут.`);
+}
+
+function getFfmpegPath(): string {
+  return process.env.FFMPEG_PATH ?? '/app/node_modules/@ffmpeg-installer/linux-x64/ffmpeg';
 }
 
 async function send(state: State, content: string) {
@@ -112,6 +131,12 @@ async function playNext(key: string): Promise<void> {
   const state = states.get(key);
   if (!state) return;
 
+  // Kill previous ffmpeg if lingering
+  if (state.ffmpeg) {
+    state.ffmpeg.kill('SIGKILL');
+    state.ffmpeg = null;
+  }
+
   const next = state.queue.shift() ?? null;
   state.current = next;
 
@@ -120,10 +145,8 @@ async function playNext(key: string): Promise<void> {
     setTimeout(() => {
       const current = states.get(key);
       if (!current || current.current || current.queue.length > 0) return;
-      // Destroy connection — this triggers the Disconnected handler which releases the agent
       current.player.stop(true);
       current.connection.destroy();
-      // Release here too in case Disconnected doesn't fire
       releaseMusicAgent(current.agentUserId);
       markChannelFree(current.guildId, current.voiceChannelId);
       states.delete(key);
@@ -133,17 +156,45 @@ async function playNext(key: string): Promise<void> {
   }
 
   try {
-    const info = await scClient.getSongInfo(next.url);
-    const stream = await info.downloadHLS();
-    
-    // Use demuxProbe to detect the correct stream type
-    const { demuxProbe } = await import('@discordjs/voice');
-    const probeResult = await demuxProbe(stream);
-    const resource = createAudioResource(probeResult.stream, {
-      inputType: probeResult.type,
+    const ytdl = getYtdl();
+
+    // Download audio-only stream from YouTube
+    const audioStream = ytdl.download(next.url, {
+      filter: { hasAudio: true, hasVideo: false },
+      quality: 'lowestaudio',
+    });
+
+    // Pipe through ffmpeg to convert to Ogg/Opus for Discord
+    const ffmpegProcess = spawn(getFfmpegPath(), [
+      '-i', 'pipe:0',
+      '-analyzeduration', '0',
+      '-loglevel', '0',
+      '-f', 'opus',
+      '-c:a', 'libopus',
+      '-b:a', '96k',
+      '-ar', '48000',
+      '-ac', '2',
+      'pipe:1',
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    state.ffmpeg = ffmpegProcess;
+
+    audioStream.pipe(ffmpegProcess.stdin);
+
+    // Handle errors gracefully
+    audioStream.on('error', (err: Error) => {
+      console.error('[music] ytdl stream error:', err.message);
+      ffmpegProcess.stdin.end();
+    });
+    ffmpegProcess.stdin.on('error', () => { /* ignore broken pipe */ });
+    ffmpegProcess.stderr.on('data', () => { /* silence ffmpeg stderr */ });
+
+    const resource = createAudioResource(ffmpegProcess.stdout, {
+      inputType: StreamType.OggOpus,
       inlineVolume: true,
     });
     resource.volume?.setVolume(0.8);
+
     state.player.play(resource);
     await send(state, `▶️ Сейчас играет: **${next.title}** — ${next.duration}`);
   } catch (error) {
@@ -156,20 +207,15 @@ async function playNext(key: string): Promise<void> {
 }
 
 async function chooseVoiceGuild(member: GuildMember): Promise<{ guild: Guild; agent: MusicBotAgent | null }> {
-  // Always prefer a pool agent. NEVER fall back to primary bot when pool exists —
-  // primary bot can only be in one voice channel at a time and will "jump" between channels.
   const agent = acquireFreeMusicAgent(member.guild.id);
   if (agent) {
-    // Use the agent's guild cache if available, otherwise fetch it
     let agentGuild = agent.client.guilds.cache.get(member.guild.id);
     if (!agentGuild) {
       try {
         agentGuild = await agent.client.guilds.fetch(member.guild.id);
       } catch {
-        // Can't access guild — release agent and try next or fall through
         console.error(`[music] Agent ${agent.client.user?.tag} can't access guild ${member.guild.id}`);
         releaseMusicAgent(agent.client.user?.id);
-        // Try another agent
         const nextAgent = acquireFreeMusicAgent(member.guild.id);
         if (nextAgent) {
           let nextGuild = nextAgent.client.guilds.cache.get(member.guild.id);
@@ -188,13 +234,11 @@ async function chooseVoiceGuild(member: GuildMember): Promise<{ guild: Guild; ag
     }
   }
 
-  // If pool is configured but all agents are busy — don't use primary bot
   const poolAgents = getMusicAgents();
   if (poolAgents.length > 0) {
     throw new Error('Все музыкальные боты заняты! Подожди пока один освободится.');
   }
 
-  // No pool configured — use primary bot (single-channel mode)
   return { guild: member.guild, agent: null };
 }
 
@@ -232,6 +276,7 @@ async function createState(member: GuildMember, interaction: ChatInputCommandInt
     current: null,
     agentUserId: agent?.client.user?.id ?? primaryClient.user?.id ?? null,
     agentTag: agent?.client.user?.tag ?? primaryClient.user?.tag ?? 'Community bot',
+    ffmpeg: null,
   };
 
   if (agent?.client.user?.id) {
@@ -300,6 +345,7 @@ export function skipMusic(guildId: string, voiceChannelId: string) {
   const state = states.get(stateKey(guildId, voiceChannelId));
   if (!state?.current) return null;
   const current = state.current;
+  if (state.ffmpeg) { state.ffmpeg.kill('SIGKILL'); state.ffmpeg = null; }
   state.player.stop();
   return current;
 }
@@ -310,6 +356,7 @@ export function stopMusic(guildId: string, voiceChannelId: string) {
   if (!state) return false;
   state.queue = [];
   state.current = null;
+  if (state.ffmpeg) { state.ffmpeg.kill('SIGKILL'); state.ffmpeg = null; }
   state.player.stop(true);
   state.connection.destroy();
   releaseMusicAgent(state.agentUserId);
