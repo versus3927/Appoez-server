@@ -24,6 +24,8 @@ const agents: MusicBotAgent[] = [];
 let poolStarted = false;
 let roundRobinIndex = 0;
 
+let primaryAgent: MusicBotAgent | null = null;
+
 // Track which voice channels are currently occupied (by any bot including primary)
 const occupiedChannels = new Set<string>();
 
@@ -85,11 +87,22 @@ function healStaleAgentState(agent: MusicBotAgent) {
   }
 }
 
-export async function startMusicBotPool() {
+export async function startMusicBotPool(primaryClient?: Client) {
   if (poolStarted) return agents;
   poolStarted = true;
 
   const primaryToken = process.env.DISCORD_TOKEN?.trim();
+
+  if (primaryClient && primaryToken) {
+    primaryAgent = {
+      tokenHint: 'PRIMARY',
+      client: primaryClient,
+      busy: false,
+      currentGuildId: null,
+      currentVoiceChannelId: null,
+    };
+  }
+
   const extraTokens = parseTokens(process.env.MUSIC_BOT_TOKENS).filter(
     (token) => token !== primaryToken,
   );
@@ -126,30 +139,35 @@ export function getMusicAgents() {
 }
 
 export function acquireFreeMusicAgent(guildId: string): MusicBotAgent | null {
+  const allPossibleAgents = primaryAgent ? [primaryAgent, ...agents] : agents;
+
   // Heal stale states before allocation
-  for (const agent of agents) {
+  for (const agent of allPossibleAgents) {
     healStaleAgentState(agent);
   }
 
-  if (agents.length === 0) return null;
+  if (allPossibleAgents.length === 0) return null;
+
+  // First check if a bot is ALREADY in this specific voice channel for this guild
+  // Though music-manager usually handles this via states Map, it doesn't hurt.
 
   // Round-robin selection so the first bot is not always preferred
-  for (let i = 0; i < agents.length; i += 1) {
-    const index = (roundRobinIndex + i) % agents.length;
-    const agent = agents[index];
+  for (let i = 0; i < allPossibleAgents.length; i += 1) {
+    const index = (roundRobinIndex + i) % allPossibleAgents.length;
+    const agent = allPossibleAgents[index];
     if (!agent.busy && agent.client.isReady()) {
       agent.busy = true;
       agent.currentGuildId = guildId;
-      roundRobinIndex = (index + 1) % agents.length;
-      console.log(`[music-pool] Acquired agent: ${agent.client.user?.tag} for guild ${guildId}`);
+      roundRobinIndex = (index + 1) % allPossibleAgents.length;
+      console.log(`[music-pool] Acquired agent: ${agent.client.user?.tag} for guild ${guildId} (Hint: ${agent.tokenHint})`);
       return agent;
     }
   }
 
   console.log(
     '[music-pool] No free agent. Status:',
-    agents
-      .map((agent) => `${agent.client.user?.tag ?? '?'}=${agent.busy ? 'BUSY' : 'FREE'}:${agent.currentVoiceChannelId ?? 'none'}`)
+    allPossibleAgents
+      .map((agent) => `${agent.client.user?.tag ?? '?'}=${agent.busy ? 'BUSY' : 'FREE'}`)
       .join(', '),
   );
   return null;
@@ -157,14 +175,16 @@ export function acquireFreeMusicAgent(guildId: string): MusicBotAgent | null {
 
 export function releaseMusicAgent(clientUserId: string | null | undefined) {
   if (!clientUserId) return;
-  const agent = agents.find((item) => item.client.user?.id === clientUserId);
+  const allPossibleAgents = primaryAgent ? [primaryAgent, ...agents] : agents;
+  const agent = allPossibleAgents.find((item) => item.client.user?.id === clientUserId);
   if (!agent) return;
   freeAgent(agent);
 }
 
 export function markMusicAgentVoice(clientUserId: string | null | undefined, guildId: string, voiceChannelId: string) {
   if (!clientUserId) return;
-  const agent = agents.find((item) => item.client.user?.id === clientUserId);
+  const allPossibleAgents = primaryAgent ? [primaryAgent, ...agents] : agents;
+  const agent = allPossibleAgents.find((item) => item.client.user?.id === clientUserId);
   if (!agent) return;
   agent.busy = true;
   agent.currentGuildId = guildId;
@@ -172,7 +192,8 @@ export function markMusicAgentVoice(clientUserId: string | null | undefined, gui
 }
 
 export function getAgentGuild(clientUserId: string, guildId: string): Guild | null {
-  const agent = agents.find((item) => item.client.user?.id === clientUserId);
+  const allPossibleAgents = primaryAgent ? [primaryAgent, ...agents] : agents;
+  const agent = allPossibleAgents.find((item) => item.client.user?.id === clientUserId);
   if (!agent) return null;
   return agent.client.guilds.cache.get(guildId) ?? null;
 }

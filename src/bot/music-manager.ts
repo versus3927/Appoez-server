@@ -218,47 +218,33 @@ async function playNext(key: string): Promise<void> {
   }
 }
 
-async function chooseVoiceGuild(member: GuildMember): Promise<{ guild: Guild; agent: MusicBotAgent | null }> {
+async function chooseVoiceGuild(member: GuildMember): Promise<{ guild: Guild; agent: MusicBotAgent }> {
   const agent = acquireFreeMusicAgent(member.guild.id);
-  if (agent) {
-    let agentGuild = agent.client.guilds.cache.get(member.guild.id);
-    if (!agentGuild) {
-      try {
-        agentGuild = await agent.client.guilds.fetch(member.guild.id);
-      } catch {
-        console.error(`[music] Agent ${agent.client.user?.tag} can't access guild ${member.guild.id}`);
-        releaseMusicAgent(agent.client.user?.id);
-        const nextAgent = acquireFreeMusicAgent(member.guild.id);
-        if (nextAgent) {
-          let nextGuild = nextAgent.client.guilds.cache.get(member.guild.id);
-          if (!nextGuild) try { nextGuild = await nextAgent.client.guilds.fetch(member.guild.id); } catch {}
-          if (nextGuild) {
-            console.log(`[music] Assigned agent ${nextAgent.client.user?.tag} to voice ${member.voice.channelId}`);
-            return { guild: nextGuild, agent: nextAgent };
-          }
-          releaseMusicAgent(nextAgent.client.user?.id);
-        }
-      }
-    }
-    if (agentGuild) {
-      console.log(`[music] Assigned agent ${agent.client.user?.tag} to voice ${member.voice.channelId}`);
-      return { guild: agentGuild, agent };
+  if (!agent) {
+    throw new Error('Все музыкальные боты заняты! Подожди, пока один освободится.');
+  }
+
+  // Ensure we can access this guild with this agent
+  let agentGuild = agent.client.guilds.cache.get(member.guild.id);
+  if (!agentGuild) {
+    try {
+      agentGuild = await agent.client.guilds.fetch(member.guild.id);
+    } catch {
+      console.error(`[music] Agent ${agent.client.user?.tag} can't access guild ${member.guild.id}`);
+      releaseMusicAgent(agent.client.user?.id);
+      // Recurse once to try another agent if available
+      return await chooseVoiceGuild(member);
     }
   }
 
-  const poolAgents = getMusicAgents();
-  if (poolAgents.length > 0) {
-    throw new Error('Все музыкальные боты заняты! Подожди пока один освободится.');
-  }
-
-  return { guild: member.guild, agent: null };
+  return { guild: agentGuild, agent };
 }
 
 async function createState(member: GuildMember, interaction: ChatInputCommandInteraction): Promise<State> {
   const voiceChannelId = member.voice.channelId!;
   const key = stateKey(member.guild.id, voiceChannelId);
   const { guild: voiceGuild, agent } = await chooseVoiceGuild(member);
-  console.log(`[music] Creating state for voice ${voiceChannelId} with ${agent?.client.user?.tag ?? primaryClient.user?.tag ?? 'primary'}`);
+  console.log(`[music] Creating state for voice ${voiceChannelId} with ${agent.client.user?.tag}`);
 
   const connection = joinVoiceChannel({
     channelId: voiceChannelId,
@@ -286,12 +272,12 @@ async function createState(member: GuildMember, interaction: ChatInputCommandInt
     player,
     queue: [],
     current: null,
-    agentUserId: agent?.client.user?.id ?? primaryClient.user?.id ?? null,
-    agentTag: agent?.client.user?.tag ?? primaryClient.user?.tag ?? 'Community bot',
+    agentUserId: agent.client.user?.id ?? null,
+    agentTag: agent.client.user?.tag ?? 'Community bot',
     ffmpeg: null,
   };
 
-  if (agent?.client.user?.id) {
+  if (agent.client.user?.id) {
     markMusicAgentVoice(agent.client.user.id, member.guild.id, voiceChannelId);
   }
 
@@ -339,6 +325,9 @@ export async function enqueueMusic(
   let state = states.get(key);
 
   if (!state) {
+    // Check if the primary bot OR any agent is already in this channel but we don't have a state for it
+    // This could happen after a crash/restart.
+    // However, createState will now correctly pick the first free agent or one that might already be there.
     state = await createState(member, interaction);
     await entersState(state.connection, VoiceConnectionStatus.Ready, 20_000);
   }

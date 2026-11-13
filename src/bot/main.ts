@@ -30,7 +30,7 @@ export function startBot(): Promise<boolean> {
           console.error('[bot] Failed to deploy slash commands:', error),
         );
         registerMessageLogs();
-        void startMusicBotPool().catch((error) =>
+        void startMusicBotPool(client).catch((error) =>
           console.error('[music-pool] Failed to start extra agents:', error),
         );
       });
