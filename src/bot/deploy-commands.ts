@@ -3,7 +3,8 @@ import { PermissionFlagsBits, REST, Routes, SlashCommandBuilder } from 'discord.
 const commands = [
   new SlashCommandBuilder()
     .setName('сетап')
-    .setDescription('Настроить сервер (создать каналы, роли)')
+    .setDescription('Настроить канал (определяет тип по названию)')
+    .addChannelOption((option) => option.setName('channel').setDescription('Канал для настройки').setRequired(true))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('муте')

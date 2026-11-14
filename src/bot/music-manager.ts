@@ -11,7 +11,6 @@ import {
   type VoiceConnection,
 } from '@discordjs/voice';
 import type { ChatInputCommandInteraction, Guild, GuildTextBasedChannel, GuildMember } from 'discord.js';
-import { client as primaryClient } from './client';
 import {
   acquireFreeMusicAgent,
   getMusicAgents,
@@ -252,6 +251,7 @@ async function createState(member: GuildMember, interaction: ChatInputCommandInt
     adapterCreator: voiceGuild.voiceAdapterCreator as any,
     selfDeaf: true,
     selfMute: false,
+    group: agent.client.user?.id ?? 'default',
   });
 
   const player = createAudioPlayer({

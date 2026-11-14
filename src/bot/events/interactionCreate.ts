@@ -27,8 +27,7 @@ export async function handleInteraction(interaction: Interaction) {
       if (!interaction.guild) return;
       await interaction.deferReply({ ephemeral: true });
       try {
-        await handleSetup(interaction.guild);
-        await interaction.editReply('✅ Настройка завершена! Каналы и роли созданы.');
+        await handleSetup(interaction);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await interaction.editReply(`❌ Ошибка при настройке: ${message}`).catch(() => {});
