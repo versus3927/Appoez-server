@@ -68,9 +68,13 @@ export async function handleMessageCreate(message: Message) {
       userId: message.author.id,
       guildId: message.guild.id,
       messageCount: 1,
+      coins: 1,
     }).onConflictDoUpdate({
       target: userStats.userId,
-      set: { messageCount: sql`${userStats.messageCount} + 1` },
+      set: { 
+        messageCount: sql`${userStats.messageCount} + 1`,
+        coins: sql`${userStats.coins} + 1`
+      },
     });
   } catch {
     // Database may be unavailable on Railway; ignore

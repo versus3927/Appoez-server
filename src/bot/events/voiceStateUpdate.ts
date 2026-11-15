@@ -185,7 +185,11 @@ export async function handleVoiceStateUpdate(oldState: VoiceState, newState: Voi
       if (stats?.lastVoiceJoin) {
         const minutes = Math.max(0, Math.floor((now.getTime() - stats.lastVoiceJoin.getTime()) / 60000));
         await db.update(userStats)
-          .set({ voiceMinutes: (stats.voiceMinutes || 0) + minutes, lastVoiceJoin: null })
+          .set({ 
+            voiceMinutes: (stats.voiceMinutes || 0) + minutes, 
+            coins: (stats.coins || 0) + (minutes * 2), // +2 coins per minute
+            lastVoiceJoin: null 
+          })
           .where(eq(userStats.userId, member.id));
       }
     }

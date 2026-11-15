@@ -16,6 +16,7 @@ import { handleMute, handleDelete, handleStats } from '../commands/handlers';
 import { handleAnonymousSlash, handleAvatar, handle8Ball, handleRoll, postAnonymousMessage } from '../commands/fun';
 import { handlePlay, handleQueue, handleSkip, handleStop } from '../commands/music';
 import { handleSetup } from '../commands/setup';
+import { handleBalance, handleTopCoins, handleHunt, handleRoulette, handleDuel, handleHangman, handleQuiz } from '../commands/games';
 import { getCachedConfig } from '../guild-config-cache';
 import { getPrivateRoom } from '../private-room-cache';
 
@@ -78,6 +79,13 @@ export async function handleInteraction(interaction: Interaction) {
     if (commandName === 'ролл') return handleRoll(interaction);
     if (commandName === 'шар') return handle8Ball(interaction);
     if (commandName === 'аватар') return handleAvatar(interaction);
+    if (commandName === 'баланс') return handleBalance(interaction);
+    if (commandName === 'топ-монет') return handleTopCoins(interaction);
+    if (commandName === 'охота') return handleHunt(interaction);
+    if (commandName === 'рулетка') return handleRoulette(interaction);
+    if (commandName === 'дуэль') return handleDuel(interaction);
+    if (commandName === 'виселица') return handleHangman(interaction);
+    if (commandName === 'квиз') return handleQuiz(interaction);
   }
 
   if (interaction.isButton()) {

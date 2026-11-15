@@ -41,6 +41,35 @@ const commands = [
     .setName('аватар')
     .setDescription('Показать аватарку пользователя')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('баланс')
+    .setDescription('Показать свой баланс или баланс другого пользователя')
+    .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('топ-монет')
+    .setDescription('Топ богачей сервера'),
+  new SlashCommandBuilder()
+    .setName('охота')
+    .setDescription('Сходить на охоту за монетами (раз в час)'),
+  new SlashCommandBuilder()
+    .setName('рулетка')
+    .setDescription('Сыграть в рулетку')
+    .addIntegerOption((option) => option.setName('amount').setDescription('Сумма ставки').setRequired(true))
+    .addStringOption((option) => option.setName('bet').setDescription('На что ставим (red, black, green)').setRequired(true).addChoices(
+      { name: '🔴 Красное (x2)', value: 'red' },
+      { name: '⚫ Черное (x2)', value: 'black' },
+      { name: '🟢 Зеленое (x36)', value: 'green' }
+    )),
+  new SlashCommandBuilder()
+    .setName('дуэль')
+    .setDescription('Вызвать на дуэль')
+    .addUserOption((option) => option.setName('user').setDescription('Кого вызвать').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('виселица')
+    .setDescription('Сыграть в виселицу'),
+  new SlashCommandBuilder()
+    .setName('квиз')
+    .setDescription('Сыграть в викторину'),
 ].map((command) => command.toJSON());
 
 export async function deployCommands() {
