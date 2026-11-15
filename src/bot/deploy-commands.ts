@@ -67,6 +67,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('виселица')
     .setDescription('Сыграть в виселицу')
+    .addIntegerOption((option) => option.setName('bet').setDescription('Ставка').setRequired(true))
     .addStringOption((option) => option.setName('mode').setDescription('Режим игры').addChoices(
       { name: '🧍 Соло', value: 'solo' },
       { name: '👥 Дуэль', value: 'duo' }
