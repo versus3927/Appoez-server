@@ -13,11 +13,9 @@ import {
 import type { ChatInputCommandInteraction, Guild, GuildTextBasedChannel, GuildMember } from 'discord.js';
 import {
   acquireFreeMusicAgent,
-  getMusicAgents,
   markMusicAgentVoice,
   releaseMusicAgent,
   type MusicBotAgent,
-  isChannelOccupied,
   markChannelFree,
   markChannelOccupied,
 } from './music-bot-pool';
@@ -25,12 +23,13 @@ import { createRequire } from 'module';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 
 const req = createRequire(import.meta.url);
-const play = req('play-dl');
+const { Ytdl } = req('@distube/ytdl-core');
 
-// Background initialization
-play.getFreeClientID().then((id: string) => {
-  play.setToken({ soundcloud: { client_id: id } });
-}).catch(() => {});
+let ytdlInstance: any = null;
+function getYtdl() {
+  if (!ytdlInstance) ytdlInstance = new Ytdl();
+  return ytdlInstance;
+}
 
 export type MusicTrack = {
   title: string;
@@ -68,59 +67,60 @@ function fmtSeconds(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-const MAX_DURATION_SEC = 4 * 60 * 60; // 4 hours
+const MAX_DURATION_SEC = 4 * 60 * 60;
 
 async function resolveTrack(query: string, requestedBy: string): Promise<MusicTrack> {
   const input = query.trim();
+  const ytdl = getYtdl();
 
-  // Handle direct links
-  const validation = await play.validate(input);
-  if (validation) {
-    if (validation === 'yt_video') {
-      const info = await play.video_basic_info(input);
-      const dur = info.video_details.durationInSec;
-      if (dur > MAX_DURATION_SEC) throw new Error(`Трек слишком длинный (${fmtSeconds(dur)}).`);
-      return {
-        title: info.video_details.title ?? 'Без названия',
-        url: info.video_details.url,
-        duration: fmtSeconds(dur),
-        thumbnail: info.video_details.thumbnails[0]?.url ?? null,
-        author: info.video_details.channel?.name ?? 'YouTube',
-        requestedBy,
-      };
-    }
-    if (validation === 'so_track') {
-      const info = await play.soundcloud(input) as any;
-      return {
-        title: info.name,
-        url: info.url,
-        duration: fmtSeconds(info.durationInSec),
-        thumbnail: info.thumbnail,
-        author: info.publisher?.name ?? 'SoundCloud',
-        requestedBy,
-      };
-    }
+  const toTrack = (info: any, fallbackUrl: string): MusicTrack => {
+    const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+    return {
+      title: info.videoDetails?.title ?? 'Без названия',
+      url: info.videoDetails?.video_url ?? fallbackUrl,
+      duration: dur > 0 ? fmtSeconds(dur) : '??:??',
+      thumbnail: info.videoDetails?.thumbnails?.[0]?.url ?? null,
+      author: info.videoDetails?.author?.name ?? 'YouTube',
+      requestedBy,
+    };
+  };
+
+  if (/(?:youtube\.com|youtu\.be)\//i.test(input)) {
+    const info = await ytdl.getInfo(input);
+    const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+    if (dur <= 0) throw new Error('Не удалось определить длительность трека.');
+    if (dur > MAX_DURATION_SEC) throw new Error(`Трек слишком длинный (${fmtSeconds(dur)}).`);
+    return toTrack(info, input);
   }
 
-  const queries = [input, `${input} audio`, `${input} official audio`];
-  for (const q of queries) {
-    const results = await play.search(q, { limit: 5 });
-    if (results.length > 0) {
-      const best = results.find((r: any) => r.durationInSec > 0 && r.durationInSec <= MAX_DURATION_SEC);
-      if (best) {
-        return {
-          title: best.title ?? 'Без названия',
-          url: best.url,
-          duration: fmtSeconds(best.durationInSec),
-          thumbnail: best.thumbnails[0]?.url ?? null,
-          author: best.channel?.name ?? 'YouTube',
-          requestedBy,
-        };
+  const tried = new Set<string>();
+  const queries = [input, `${input} audio`, `${input} official audio`, `${input} song`];
+
+  for (const searchQuery of queries) {
+    const results = await ytdl.search(searchQuery);
+    const items: any[] = Array.isArray(results) ? results : (results?.items ?? Object.values(results));
+    if (!items?.length) continue;
+
+    for (const item of items.slice(0, 25)) {
+      try {
+        const videoUrl = item.url ?? `https://www.youtube.com/watch?v=${item.id}`;
+        if (!videoUrl || tried.has(videoUrl)) continue;
+        tried.add(videoUrl);
+
+        const info = await ytdl.getInfo(videoUrl);
+        const dur = parseInt(info.videoDetails?.lengthSeconds ?? '0', 10);
+        const isLive = Boolean(info.videoDetails?.isLiveContent) || dur <= 0;
+        if (isLive) continue;
+        if (dur > MAX_DURATION_SEC) continue;
+
+        return toTrack(info, videoUrl);
+      } catch {
+        // try next result
       }
     }
   }
 
-  throw new Error('Не удалось найти подходящий трек. Попробуй точнее написать название.');
+  throw new Error('Не удалось найти подходящий трек. Попробуй точнее написать название или вставить ссылку.');
 }
 
 function getFfmpegPath(): string {
@@ -153,18 +153,49 @@ async function playNext(key: string): Promise<void> {
       releaseMusicAgent(current.agentUserId);
       markChannelFree(current.guildId, current.voiceChannelId);
       states.delete(key);
+      console.log('[music] Released agent after queue timeout:', current.agentTag);
     }, 30_000);
     return;
   }
 
   try {
-    const stream = await play.stream(next.url, {
-      quality: 1, 
-      discordPlayerCompatibility: true,
+    const ytdl = getYtdl();
+    const input = ytdl.download(next.url, {
+      filter: { hasAudio: true, hasVideo: false },
+      quality: 'lowestaudio',
     });
 
-    const resource = createAudioResource(stream.stream, {
-      inputType: stream.type,
+    // IMPORTANT: -re makes ffmpeg output in real time, so the queue does not end instantly.
+    const ffmpegProcess = spawn(getFfmpegPath(), [
+      '-re',
+      '-i', 'pipe:0',
+      '-vn',
+      '-loglevel', 'error',
+      '-f', 's16le',
+      '-ar', '48000',
+      '-ac', '2',
+      'pipe:1',
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    state.ffmpeg = ffmpegProcess;
+    input.pipe(ffmpegProcess.stdin);
+
+    input.on('error', (err: Error) => {
+      console.error('[music] ytdl error:', err.message);
+      ffmpegProcess.stdin.end();
+    });
+
+    ffmpegProcess.stdin.on('error', () => {});
+    ffmpegProcess.stderr.on('data', (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) console.error('[music] ffmpeg:', text);
+    });
+    ffmpegProcess.on('exit', (code, signal) => {
+      console.log('[music] ffmpeg exit:', { code, signal, track: next.title });
+    });
+
+    const resource = createAudioResource(ffmpegProcess.stdout, {
+      inputType: StreamType.Raw,
       inlineVolume: true,
     });
     resource.volume?.setVolume(0.8);
@@ -173,33 +204,10 @@ async function playNext(key: string): Promise<void> {
     await send(state, `▶️ Сейчас играет: **${next.title}** — ${next.duration}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('[music] playback error:', message);
-    
-    // Fallback: try ffmpeg if play-dl stream failed
-    try {
-      const ffmpegProcess = spawn(getFfmpegPath(), [
-        '-i', next.url,
-        '-vn',
-        '-loglevel', 'error',
-        '-f', 's16le',
-        '-ar', '48000',
-        '-ac', '2',
-        'pipe:1',
-      ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-      state.ffmpeg = ffmpegProcess;
-      const resource = createAudioResource(ffmpegProcess.stdout, {
-        inputType: StreamType.Raw,
-        inlineVolume: true,
-      });
-      resource.volume?.setVolume(0.8);
-      state.player.play(resource);
-      await send(state, `▶️ Сейчас играет (fallback): **${next.title}** — ${next.duration}`);
-    } catch (e) {
-      await send(state, `❌ Ошибка потока: ${message}`);
-      state.current = null;
-      await playNext(key);
-    }
+    console.error('[music] Stream error:', message);
+    await send(state, `❌ Ошибка потока: ${message}`);
+    state.current = null;
+    await playNext(key);
   }
 }
 
