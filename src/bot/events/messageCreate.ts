@@ -68,7 +68,7 @@ export async function handleMessageCreate(message: Message) {
       userId: message.author.id,
       guildId: message.guild.id,
       messageCount: 1,
-      coins: 1,
+      coins: 100,
     }).onConflictDoUpdate({
       target: userStats.userId,
       set: { 

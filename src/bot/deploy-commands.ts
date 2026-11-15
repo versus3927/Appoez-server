@@ -66,7 +66,12 @@ const commands = [
     .addUserOption((option) => option.setName('user').setDescription('Кого вызвать').setRequired(true)),
   new SlashCommandBuilder()
     .setName('виселица')
-    .setDescription('Сыграть в виселицу'),
+    .setDescription('Сыграть в виселицу')
+    .addStringOption((option) => option.setName('mode').setDescription('Режим игры').addChoices(
+      { name: '🧍 Соло', value: 'solo' },
+      { name: '👥 Дуэль', value: 'duo' }
+    ))
+    .addUserOption((option) => option.setName('opponent').setDescription('Соперник (для дуэли)')),
   new SlashCommandBuilder()
     .setName('квиз')
     .setDescription('Сыграть в викторину'),
