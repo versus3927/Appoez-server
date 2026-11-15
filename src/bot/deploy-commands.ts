@@ -5,7 +5,7 @@ const commands = [
     .setName('сетап')
     .setDescription('Настроить канал (определяет тип по названию)')
     .addChannelOption((option) => option.setName('channel').setDescription('Канал для настройки').setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDefaultMemberPermissions(null),
   new SlashCommandBuilder()
     .setName('муте')
     .setDescription('Замутить пользователя')
