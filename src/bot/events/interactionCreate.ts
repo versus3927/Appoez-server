@@ -26,10 +26,11 @@ export async function handleInteraction(interaction: Interaction) {
     if (commandName === 'сетап') {
       if (!interaction.guild) return;
 
-      // Allow if user has system Administrator permission OR a role named "administrator"
+      // Allow if user has system Administrator permission OR a role that CONTAINS "administrator" in its name
       const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
       const hasAdminPerm = member?.permissions.has(PermissionFlagsBits.Administrator) ?? false;
-      const hasAdminRole = member?.roles.cache.some(r => r.name.toLowerCase() === 'administrator') ?? false;
+      const hasAdminRole = member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator')) ?? false;
+      
       if (!hasAdminPerm && !hasAdminRole) {
         return interaction.reply({ content: '❌ Эта команда доступна только администраторам.', ephemeral: true });
       }
