@@ -46,7 +46,8 @@ export async function handleInteraction(interaction: Interaction) {
     }
 
     const musicCommands = ['музыка', 'скип', 'стоп', 'очередь'];
-    if (musicCommands.includes(commandName) && interaction.guild) {
+    const gameCommands = ['ролл', 'шар', 'аватар', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
+    if ((musicCommands.includes(commandName) || gameCommands.includes(commandName)) && interaction.guild) {
       let config = null;
       try {
         const { db } = await import('@/db');
@@ -59,9 +60,16 @@ export async function handleInteraction(interaction: Interaction) {
       }
       if (!config) config = getCachedConfig(interaction.guild.id);
 
-      if (config?.musicChannelId && interaction.channelId !== config.musicChannelId) {
+      if (musicCommands.includes(commandName) && config?.musicChannelId && interaction.channelId !== config.musicChannelId) {
         return interaction.reply({
           content: `❌ Команды музыки можно использовать только в канале <#${config.musicChannelId}>!`,
+          ephemeral: true,
+        });
+      }
+
+      if (gameCommands.includes(commandName) && config?.commandsChannelId && interaction.channelId !== config.commandsChannelId) {
+        return interaction.reply({
+          content: `❌ Игровые команды можно использовать только в канале <#${config.commandsChannelId}>!`,
           ephemeral: true,
         });
       }

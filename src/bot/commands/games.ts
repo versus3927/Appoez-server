@@ -1,6 +1,8 @@
-import { ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type Message, PermissionFlagsBits } from 'discord.js';
+import { ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type Message } from 'discord.js';
 import { eq, desc } from 'drizzle-orm';
 import { QUESTIONS } from './quiz-questions';
+
+const quizCooldowns = new Map<string, number>();
 
 async function getDbSafe() {
   const { getDb } = await import('@/db');
@@ -322,12 +324,17 @@ async function hangmanDuo(interaction: ChatInputCommandInteraction, bet: number)
 }
 
 export async function handleQuiz(interaction: ChatInputCommandInteraction) {
-  // Checking Admin explicitly for quiz
-  const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
-  const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
-  if (!hasAdmin) {
-    return interaction.editReply('❌ Эту команду могут использовать только администраторы.');
+  const cooldownKey = `${interaction.guildId}:${interaction.user.id}`;
+  const now = Date.now();
+  const lastUsed = quizCooldowns.get(cooldownKey) ?? 0;
+  const remainingMs = 60_000 - (now - lastUsed);
+
+  if (remainingMs > 0) {
+    const seconds = Math.ceil(remainingMs / 1000);
+    return interaction.editReply(`⏱️ Квиз можно запускать раз в минуту. Подожди ещё **${seconds}** сек.`);
   }
+
+  quizCooldowns.set(cooldownKey, now);
 
   const qObj = QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
   const acceptable = [qObj.a.toLowerCase(), qObj.a.toLowerCase().replace('ё', 'е')];
@@ -342,7 +349,8 @@ export async function handleQuiz(interaction: ChatInputCommandInteraction) {
     if (m.author.bot || answered) return;
     const answer = m.content.toLowerCase().trim().replace('ё', 'е');
     if (acceptable.includes(answer)) {
-      answered = true; collector.stop('correct');
+      answered = true;
+      collector.stop('correct');
       try {
         const { db, userStats } = await getDbSafe();
         const s = await ensureUser(m.author.id, interaction.guildId!);
