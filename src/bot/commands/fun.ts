@@ -4,19 +4,19 @@ export async function handleRoll(interaction: ChatInputCommandInteraction) {
   await interaction.editReply(`🎲 Выпало: **${Math.floor(Math.random() * 100) + 1}**`);
 }
 
-const BALL_ANSWERS = [
-  '✅ Бесспорно', '✅ Определённо да', '✅ Никаких сомнений', '✅ Можешь быть уверен',
-  '✅ Мне кажется — да', '✅ Скорее всего', '✅ Хорошие перспективы', '✅ Да',
-  '🤔 Пока не ясно, попробуй снова', '🤔 Спроси позже', '🤔 Лучше не рассказывать',
-  '🤔 Сейчас нельзя предсказать', '🤔 Сконцентрируйся и спроси опять',
-  '❌ Даже не думай', '❌ Мой ответ — нет', '❌ Весьма сомнительно',
-  '❌ По моим данным — нет', '❌ Перспективы не очень', '❌ Нет', '❌ Точно нет',
-];
-
 export async function handle8Ball(interaction: ChatInputCommandInteraction) {
   const question = interaction.options.getString('question', true);
-  const answer = BALL_ANSWERS[Math.floor(Math.random() * BALL_ANSWERS.length)];
-  await interaction.editReply(`🎱 **${question}**\n\n${answer}`);
+  
+  try {
+    const prompt = `Ответь на вопрос пользователя кратко и остроумно, как мистический оракул или магический шар. Вопрос: "${question}"`;
+    const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=qwen&system=You%20are%20a%20mystical%20russian%20oracle&private=true`);
+    const text = await res.text();
+    
+    await interaction.editReply(`🎱 **${question}**\n\n🔮 ${text.trim()}`);
+  } catch (error) {
+    console.error('[8ball]', error);
+    await interaction.editReply(`🎱 **${question}**\n\n🤔 Магический туман скрывает ответ. Попробуй позже.`);
+  }
 }
 
 export async function handleAvatar(interaction: ChatInputCommandInteraction) {
