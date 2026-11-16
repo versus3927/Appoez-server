@@ -7,7 +7,7 @@ export const userStats = pgTable("user_stats", {
   voiceMinutes: integer("voice_minutes").default(0).notNull(),
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
   lastVoiceJoin: timestamp("last_voice_join"),
-  coins: integer("coins").default(0).notNull(),
+  coins: integer("coins").default(100).notNull(),
   lastHunt: timestamp("last_hunt"),
 });
 
