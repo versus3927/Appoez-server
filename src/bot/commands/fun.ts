@@ -4,19 +4,21 @@ export async function handleRoll(interaction: ChatInputCommandInteraction) {
   await interaction.editReply(`🎲 Выпало: **${Math.floor(Math.random() * 100) + 1}**`);
 }
 
-const BALL_ANSWERS = [
-  '✅ Бесспорно', '✅ Определённо да', '✅ Никаких сомнений', '✅ Можешь быть уверен',
-  '✅ Мне кажется — да', '✅ Скорее всего', '✅ Хорошие перспективы', '✅ Да',
-  '🤔 Пока не ясно, попробуй снова', '🤔 Спроси позже', '🤔 Лучше не рассказывать',
-  '🤔 Сейчас нельзя предсказать', '🤔 Сконцентрируйся и спроси опять',
-  '❌ Даже не думай', '❌ Мой ответ — нет', '❌ Весьма сомнительно',
-  '❌ По моим данным — нет', '❌ Перспективы не очень', '❌ Нет', '❌ Точно нет',
-];
-
 export async function handle8Ball(interaction: ChatInputCommandInteraction) {
   const question = interaction.options.getString('question', true);
-  const answer = BALL_ANSWERS[Math.floor(Math.random() * BALL_ANSWERS.length)];
-  await interaction.editReply(`🎱 **${question}**\n\n${answer}`);
+  
+  try {
+    // Используем модель Qwen через Pollinations AI
+    // Промпт заставляет ИИ отвечать кратко, в стиле магического шара
+    const prompt = `Ты — магический шар-предсказатель. Ответь на вопрос: "${question}". Твой ответ должен быть кратким (одна фраза) и мистическим. Модель: Qwen.`;
+    const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=qwen&system=You%20are%20a%20helpful%20mystical%20assistant&private=true`);
+    const answer = await res.text();
+    
+    await interaction.editReply(`🎱 **${question}**\n\n${answer.trim()}`);
+  } catch (error) {
+    console.error('[8ball]', error);
+    await interaction.editReply(`🎱 **${question}**\n\n🤔 Хм, магический туман затуманил мой взор... Попробуй позже.`);
+  }
 }
 
 export async function handleAvatar(interaction: ChatInputCommandInteraction) {
