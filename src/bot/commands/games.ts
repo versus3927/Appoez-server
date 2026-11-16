@@ -1,5 +1,6 @@
-import { ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type Message } from 'discord.js';
+import { ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type Message, PermissionFlagsBits } from 'discord.js';
 import { eq, desc } from 'drizzle-orm';
+import { QUESTIONS } from './quiz-questions';
 
 async function getDbSafe() {
   const { getDb } = await import('@/db');
@@ -20,6 +21,7 @@ async function ensureUser(userId: string, guildId: string) {
 }
 
 export async function handleBalance(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   try {
     const target = interaction.options.getUser('user') || interaction.user;
     const stats = await ensureUser(target.id, interaction.guildId!);
@@ -27,13 +29,14 @@ export async function handleBalance(interaction: ChatInputCommandInteraction) {
       .setTitle(`💰 Баланс ${target.username}`)
       .setDescription(`**${stats.coins}** монет`)
       .setColor(0xf1c40f);
-    return interaction.reply({ embeds: [embed] });
+    return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.reply({ content: `❌ ${e instanceof Error ? e.message : e}`, ephemeral: true });
+    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
   }
 }
 
 export async function handleTopCoins(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   try {
     const { db, userStats } = await getDbSafe();
     const top = await db.query.userStats.findMany({ orderBy: [desc(userStats.coins)], limit: 10 });
@@ -46,13 +49,14 @@ export async function handleTopCoins(interaction: ChatInputCommandInteraction) {
       .setTitle('🏆 Топ богачей')
       .setDescription(descText || 'Пока никого нет.')
       .setColor(0xf1c40f);
-    return interaction.reply({ embeds: [embed] });
+    return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.reply({ content: `❌ ${e instanceof Error ? e.message : e}`, ephemeral: true });
+    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
   }
 }
 
 export async function handleHunt(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   try {
     const { db, userStats } = await getDbSafe();
     const stats = await ensureUser(interaction.user.id, interaction.guildId!);
@@ -69,7 +73,7 @@ export async function handleHunt(interaction: ChatInputCommandInteraction) {
       const diffHours = (now.getTime() - stats.lastHunt.getTime()) / (1000 * 60 * 60);
       if (diffHours < 1 && dailyBonus === 0) {
         const waitMins = Math.ceil((1 - diffHours) * 60);
-        return interaction.reply({ content: `⏱️ Охотиться можно раз в час! Подожди ещё **${waitMins}** мин.`, ephemeral: true });
+        return interaction.editReply({ content: `⏱️ Охотиться можно раз в час! Подожди ещё **${waitMins}** мин.` });
       }
     }
 
@@ -80,20 +84,22 @@ export async function handleHunt(interaction: ChatInputCommandInteraction) {
     let desc = `Ты добыл **${reward} 💰** на охоте!`;
     if (dailyBonus > 0) desc += `\n🎁 Ежедневный бонус: **+${dailyBonus} 💰** (баланс был < 100)`;
     const embed = new EmbedBuilder().setTitle('🏹 Охота').setDescription(desc).setColor(0x2ecc71);
-    return interaction.reply({ embeds: [embed] });
+    return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.reply({ content: `❌ ${e instanceof Error ? e.message : e}`, ephemeral: true });
+    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
   }
 }
 
 export async function handleRoulette(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   try {
     const { db, userStats } = await getDbSafe();
     const amount = interaction.options.getInteger('amount', true);
     const bet = interaction.options.getString('bet', true);
-    if (amount <= 0) return interaction.reply({ content: '❌ Ставка должна быть больше 0.', ephemeral: true });
+    if (amount <= 0) return interaction.editReply({ content: '❌ Ставка должна быть больше 0.' });
+    
     const stats = await ensureUser(interaction.user.id, interaction.guildId!);
-    if (stats.coins < amount) return interaction.reply({ content: `❌ Недостаточно монет. У тебя **${stats.coins} 💰**.`, ephemeral: true });
+    if (stats.coins < amount) return interaction.editReply({ content: `❌ Недостаточно монет. У тебя **${stats.coins} 💰**.` });
 
     const roll = Math.floor(Math.random() * 37);
     let resultColor = 'green';
@@ -108,26 +114,33 @@ export async function handleRoulette(interaction: ChatInputCommandInteraction) {
       .setTitle('🎰 Рулетка')
       .setDescription(`Выпало: **${roll}** ${emoji}\n\n${win ? `🎉 Ты выиграл **${amount * multiplier} 💰**!` : `💀 Ты проиграл **${amount} 💰**.`}\nБаланс: **${stats.coins + profit} 💰**`)
       .setColor(win ? 0x2ecc71 : 0xe74c3c);
-    return interaction.reply({ embeds: [embed] });
+    return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.reply({ content: `❌ ${e instanceof Error ? e.message : e}`, ephemeral: true });
+    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
   }
 }
 
 export async function handleDuel(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   try {
     const target = interaction.options.getUser('user', true);
-    if (target.id === interaction.user.id) return interaction.reply({ content: '❌ Нельзя вызвать себя.', ephemeral: true });
-    if (target.bot) return interaction.reply({ content: '❌ Нельзя драться с ботом.', ephemeral: true });
+    if (target.id === interaction.user.id) return interaction.editReply({ content: '❌ Нельзя вызвать себя.' });
+    if (target.bot) return interaction.editReply({ content: '❌ Нельзя драться с ботом.' });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('duel_accept').setLabel('Принять').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('duel_decline').setLabel('Отказаться').setStyle(ButtonStyle.Danger),
     );
 
-    const response = await interaction.reply({ content: `⚔️ <@${target.id}>, тебя вызывает на дуэль <@${interaction.user.id}>!`, components: [row], fetchReply: true });
+    await interaction.editReply({ content: `⚔️ <@${target.id}>, тебя вызывает на дуэль <@${interaction.user.id}>!`, components: [row] });
+    const response = await interaction.fetchReply();
+    
     const confirmation = await response.awaitMessageComponent({ filter: (i: any) => i.user.id === target.id, time: 60_000 }).catch(() => null);
-    if (!confirmation || confirmation.customId === 'duel_decline') return interaction.editReply({ content: '❌ Дуэль отменена.', components: [] });
+    if (!confirmation) return interaction.editReply({ content: '❌ Время вышло. Дуэль отменена.', components: [] });
+    if (confirmation.customId === 'duel_decline') {
+      await confirmation.update({ content: '❌ Дуэль отменена.', components: [] });
+      return;
+    }
 
     let hp1 = 3, hp2 = 3, round = 0;
     const actRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -169,21 +182,26 @@ export async function handleDuel(interaction: ChatInputCommandInteraction) {
       } catch {}
       await interaction.editReply({ content: `🏆 <@${winnerId}> побеждает и получает **50 💰**!`, components: [] });
     } else await interaction.editReply({ content: '🤝 Ничья!', components: [] });
-  } catch { await interaction.editReply({ content: '⏱️ Время вышло.', components: [] }).catch(() => {}); }
+  } catch { await interaction.editReply({ content: '❌ Произошла ошибка.', components: [] }).catch(() => {}); }
 }
 
 const WORDS = ["ПРОГРАММИСТ", "СЕРВЕР", "ДИСКОРД", "РУЛЕТКА", "ЭКОНОМИКА", "МОНЕТА", "АДМИН", "МУЗЫКА", "КОМПЬЮТЕР", "ИНТЕРНЕТ", "ПЛАНЕТА", "КОСМОС", "РОБОТ", "МАТРИЦА", "ГАЛАКТИКА"];
 
 export async function handleHangman(interaction: ChatInputCommandInteraction) {
-  const mode = interaction.options.getString('mode') ?? 'solo';
-  const bet = interaction.options.getInteger('bet', true);
-  if (bet < 0) return interaction.reply({ content: '❌ Ставка не может быть отрицательной.', ephemeral: true });
+  await interaction.deferReply();
+  try {
+    const mode = interaction.options.getString('mode') ?? 'solo';
+    const bet = interaction.options.getInteger('bet', true);
+    if (bet < 0) return interaction.editReply({ content: '❌ Ставка не может быть отрицательной.' });
 
-  const stats = await ensureUser(interaction.user.id, interaction.guildId!);
-  if (stats.coins < bet) return interaction.reply({ content: `❌ У тебя недостаточно монет (нужно **${bet} 💰**, а у тебя **${stats.coins}**).`, ephemeral: true });
+    const stats = await ensureUser(interaction.user.id, interaction.guildId!);
+    if (stats.coins < bet) return interaction.editReply({ content: `❌ У тебя недостаточно монет (нужно **${bet} 💰**, а у тебя **${stats.coins}**).` });
 
-  if (mode === 'solo') await hangmanSolo(interaction, bet);
-  else await hangmanDuo(interaction, bet);
+    if (mode === 'solo') await hangmanSolo(interaction, bet);
+    else await hangmanDuo(interaction, bet);
+  } catch (e) {
+    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
+  }
 }
 
 async function hangmanSolo(interaction: ChatInputCommandInteraction, bet: number) {
@@ -196,7 +214,7 @@ async function hangmanSolo(interaction: ChatInputCommandInteraction, bet: number
   const getDisplay = () => word.split('').map(l => guessed.has(l) ? `**${l}**` : '⬜').join(' ');
   const isWon = () => word.split('').every(l => guessed.has(l));
 
-  await interaction.reply(`🎮 **Виселица** (соло)\nСтавка: **${bet} 💰**\nСлово: ${getDisplay()}\nОшибок: ${mistakes}/${maxMistakes}\n*Пишите одну русскую букву! (1 мин на ход)*`);
+  await interaction.editReply(`🎮 **Виселица** (соло)\nСтавка: **${bet} 💰**\nСлово: ${getDisplay()}\nОшибок: ${mistakes}/${maxMistakes}\n*Пишите одну русскую букву! (1 мин на ход)*`);
 
   const channel = interaction.channel as any;
   let lastActivity = Date.now();
@@ -235,18 +253,26 @@ async function hangmanSolo(interaction: ChatInputCommandInteraction, bet: number
 async function hangmanDuo(interaction: ChatInputCommandInteraction, bet: number) {
   const p1 = interaction.user;
   const target = interaction.options.getUser('opponent');
-  if (!target || target.bot || target.id === p1.id) return interaction.reply({ content: '❌ Укажи соперника.', ephemeral: true });
+  if (!target || target.bot || target.id === p1.id) return interaction.editReply({ content: '❌ Укажи соперника.' });
 
   const tStats = await ensureUser(target.id, interaction.guildId!);
-  if (tStats.coins < bet) return interaction.reply({ content: `❌ У противника недостаточно монет для этой ставки (**${bet} 💰**).`, ephemeral: true });
+  if (tStats.coins < bet) return interaction.editReply({ content: `❌ У противника недостаточно монет для этой ставки (**${bet} 💰**).` });
 
   const acceptRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('hm_accept').setLabel('Принять').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('hm_decline').setLabel('Отказаться').setStyle(ButtonStyle.Danger),
   );
-  const resp = await interaction.reply({ content: `🎮 <@${target.id}>, <@${p1.id}> вызывает тебя на дуэль в виселицу! Ставка: **${bet} 💰**`, components: [acceptRow], fetchReply: true });
+  
+  await interaction.editReply({ content: `🎮 <@${target.id}>, <@${p1.id}> вызывает тебя на дуэль в виселицу! Ставка: **${bet} 💰**`, components: [acceptRow] });
+  const resp = await interaction.fetchReply();
+
   const conf = await resp.awaitMessageComponent({ filter: (i: any) => i.user.id === target.id, time: 60_000 }).catch(() => null);
-  if (!conf || conf.customId === 'hm_decline') return interaction.editReply({ content: '❌ Игра отменена.', components: [] });
+  if (!conf) return interaction.editReply({ content: '❌ Время вышло. Игра отменена.', components: [] });
+  if (conf.customId === 'hm_decline') {
+    await conf.update({ content: '❌ Игра отменена.', components: [] });
+    return;
+  }
+  
   await conf.update({ content: '🎮 **Виселица (дуэль)** начинается!', components: [] });
 
   const word1 = WORDS[Math.floor(Math.random() * WORDS.length)], word2 = WORDS[Math.floor(Math.random() * WORDS.length)];
@@ -297,16 +323,24 @@ async function hangmanDuo(interaction: ChatInputCommandInteraction, bet: number)
 }
 
 export async function handleQuiz(interaction: ChatInputCommandInteraction) {
-  const QUESTIONS = [
-    { q: "Сколько бит в байте?", a: "8" }, { q: "Столица Японии?", a: "токио" }, { q: "Сколько дней в високосном году?", a: "366" },
-    { q: "Какой элемент обозначается символом O?", a: "кислород" }, { q: "Сколько цветов в радуге?", a: "7" }
-  ];
+  await interaction.deferReply();
+  
+  // Checking Admin explicitly for quiz
+  const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
+  const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
+  if (!hasAdmin) {
+    return interaction.editReply('❌ Эту команду могут использовать только администраторы.');
+  }
+
   const qObj = QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
   const acceptable = [qObj.a.toLowerCase(), qObj.a.toLowerCase().replace('ё', 'е')];
-  await interaction.reply(`🧠 **Квиз!** Первый правильный ответ получит **20 💰**!\n\n**${qObj.q}**`);
+  
+  await interaction.editReply(`🧠 **Квиз!** Первый правильный ответ получит **20 💰**!\n\n**${qObj.q}**`);
+  
   const channel = interaction.channel as any;
   const collector = channel.createMessageCollector({ time: 20_000 });
   let answered = false;
+  
   collector.on('collect', async (m: Message) => {
     if (m.author.bot || answered) return;
     const answer = m.content.toLowerCase().trim().replace('ё', 'е');
@@ -320,5 +354,8 @@ export async function handleQuiz(interaction: ChatInputCommandInteraction) {
       await interaction.followUp(`🎉 <@${m.author.id}> правильно: **${qObj.a}**! +**20 💰**`);
     }
   });
-  collector.on('end', (_: any, reason: string) => { if (reason !== 'correct') interaction.followUp(`⏰ Ответ: **${qObj.a}**`).catch(() => {}); });
+  
+  collector.on('end', (_: any, reason: string) => { 
+    if (reason !== 'correct') interaction.followUp(`⏰ Ответ: **${qObj.a}**`).catch(() => {}); 
+  });
 }
