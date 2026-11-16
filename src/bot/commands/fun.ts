@@ -5,7 +5,6 @@ export async function handleRoll(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handle8Ball(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   const question = interaction.options.getString('question', true);
   try {
     const res = await fetch(`https://hercai.onrender.com/v3/hercai?question=${encodeURIComponent(question)}`);

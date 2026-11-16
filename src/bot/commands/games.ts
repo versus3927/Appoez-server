@@ -21,7 +21,6 @@ async function ensureUser(userId: string, guildId: string) {
 }
 
 export async function handleBalance(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   try {
     const target = interaction.options.getUser('user') || interaction.user;
     const stats = await ensureUser(target.id, interaction.guildId!);
@@ -36,7 +35,6 @@ export async function handleBalance(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleTopCoins(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   try {
     const { db, userStats } = await getDbSafe();
     const top = await db.query.userStats.findMany({ orderBy: [desc(userStats.coins)], limit: 10 });
@@ -56,7 +54,6 @@ export async function handleTopCoins(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleHunt(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   try {
     const { db, userStats } = await getDbSafe();
     const stats = await ensureUser(interaction.user.id, interaction.guildId!);
@@ -91,7 +88,6 @@ export async function handleHunt(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleRoulette(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   try {
     const { db, userStats } = await getDbSafe();
     const amount = interaction.options.getInteger('amount', true);
@@ -121,7 +117,6 @@ export async function handleRoulette(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleDuel(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   try {
     const target = interaction.options.getUser('user', true);
     if (target.id === interaction.user.id) return interaction.editReply({ content: '❌ Нельзя вызвать себя.' });
@@ -188,7 +183,6 @@ export async function handleDuel(interaction: ChatInputCommandInteraction) {
 const WORDS = ["ПРОГРАММИСТ", "СЕРВЕР", "ДИСКОРД", "РУЛЕТКА", "ЭКОНОМИКА", "МОНЕТА", "АДМИН", "МУЗЫКА", "КОМПЬЮТЕР", "ИНТЕРНЕТ", "ПЛАНЕТА", "КОСМОС", "РОБОТ", "МАТРИЦА", "ГАЛАКТИКА"];
 
 export async function handleHangman(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
   try {
     const mode = interaction.options.getString('mode') ?? 'solo';
     const bet = interaction.options.getInteger('bet', true);
@@ -323,8 +317,6 @@ async function hangmanDuo(interaction: ChatInputCommandInteraction, bet: number)
 }
 
 export async function handleQuiz(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
-  
   // Checking Admin explicitly for quiz
   const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
   const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));

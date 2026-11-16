@@ -3,8 +3,7 @@ import { enqueueMusic, getMusicQueue, skipMusic, stopMusic } from '../music-mana
 
 export async function handlePlay(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as GuildMember;
-  if (!member.voice.channelId) return interaction.reply({ content: '❌ Зайди в голосовой канал!', ephemeral: true });
-  await interaction.deferReply();
+  if (!member.voice.channelId) return interaction.editReply({ content: '❌ Зайди в голосовой канал!' });
   try {
     const track = await enqueueMusic(interaction, member, interaction.options.getString('query', true));
     await interaction.editReply({ embeds: [new EmbedBuilder().setTitle('🎶 Добавлено').setDescription(`**[${track.title}](${track.url})**`).addFields({ name: '👤', value: track.author, inline: true }, { name: '⏱️', value: track.duration, inline: true }).setThumbnail(track.thumbnail).setColor(0x8b5cf6).setFooter({ text: `Запросил: ${track.requestedBy}` })] });

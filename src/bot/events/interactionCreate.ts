@@ -26,18 +26,17 @@ export async function handleInteraction(interaction: Interaction) {
 
     if (commandName === 'сетап') {
       if (!interaction.guild) return;
-
-      // Allow if user has system Administrator permission OR a role that CONTAINS "administrator" in its name
-      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-      const hasAdminPerm = member?.permissions.has(PermissionFlagsBits.Administrator) ?? false;
-      const hasAdminRole = member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator')) ?? false;
-      
-      if (!hasAdminPerm && !hasAdminRole) {
-        return interaction.reply({ content: '❌ Эта команда доступна только администраторам.', ephemeral: true });
-      }
-
       await interaction.deferReply({ ephemeral: true });
+
       try {
+        const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        const hasAdminPerm = member?.permissions.has(PermissionFlagsBits.Administrator) ?? false;
+        const hasAdminRole = member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator')) ?? false;
+        
+        if (!hasAdminPerm && !hasAdminRole) {
+          return interaction.editReply('❌ Эта команда доступна только администраторам.');
+        }
+
         await handleSetup(interaction);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -65,6 +64,13 @@ export async function handleInteraction(interaction: Interaction) {
           content: `❌ Команды музыки можно использовать только в канале <#${config.musicChannelId}>!`,
           ephemeral: true,
         });
+      }
+    }
+
+    // For all other commands, defer reply to prevent "Application did not respond"
+    if (['ролл', 'шар', 'аватар', 'стата', 'муте', 'делит', 'музыка', 'скип', 'стоп', 'очередь', 'анон', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз'].includes(commandName)) {
+      if (commandName !== 'анон') { // handled separately or already deferred
+        await interaction.deferReply().catch(() => {});
       }
     }
 

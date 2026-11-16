@@ -17,10 +17,8 @@ async function getDbSafe() {
 
 export async function handleMute(interaction: ChatInputCommandInteraction) {
     const target = interaction.options.getMember('user') as GuildMember;
-    if (!target) return interaction.reply({ content: '❌ Пользователь не найден.', ephemeral: true });
+    if (!target) return interaction.editReply({ content: '❌ Пользователь не найден.' });
 
-    await interaction.deferReply({ ephemeral: true });
-    
     try {
         const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
         const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
@@ -46,10 +44,8 @@ export async function handleMute(interaction: ChatInputCommandInteraction) {
 
 export async function handleDelete(interaction: ChatInputCommandInteraction) {
     if (interaction.user.id !== interaction.guild?.ownerId) {
-        return interaction.reply({ content: '❌ Только владелец может использовать эту команду!', ephemeral: true });
+        return interaction.editReply({ content: '❌ Только владелец может использовать эту команду!' });
     }
-
-    await interaction.deferReply();
 
     try {
         const channels = await interaction.guild.channels.fetch();
@@ -72,8 +68,6 @@ export async function handleDelete(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleStats(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
-
     try {
         const target = interaction.options.getUser('user') || interaction.user;
         const { db, userStats } = await getDbSafe();
