@@ -67,9 +67,10 @@ export async function handleInteraction(interaction: Interaction) {
         });
       }
 
-      if (gameCommands.includes(commandName) && config?.commandsChannelId && interaction.channelId !== config.commandsChannelId) {
+      const gamesChannelId = config?.gamesChannelId ?? config?.commandsChannelId;
+      if (gameCommands.includes(commandName) && gamesChannelId && interaction.channelId !== gamesChannelId) {
         return interaction.reply({
-          content: `❌ Игровые команды можно использовать только в канале <#${config.commandsChannelId}>!`,
+          content: `❌ Игровые команды можно использовать только в канале <#${gamesChannelId}>!`,
           ephemeral: true,
         });
       }

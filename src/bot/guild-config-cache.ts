@@ -13,6 +13,7 @@ export interface GuildConfig {
     categoryId: string | null;
     welcomeChannelId: string | null;
     commandsChannelId: string | null;
+    gamesChannelId: string | null;
     musicChannelId: string | null;
 }
 

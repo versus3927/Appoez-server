@@ -10,6 +10,7 @@ import { setCachedConfig } from '../guild-config-cache';
  *   - участники  → welcome channel (embed)
  *   - правила    → rules embed
  *   - команды    → commands embed
+ *   - игры       → games channel config
  *   - музыка (text) → music channel embed
  *   - анонимки   → anonymous button embed
  *   - управление → private room control embed + buttons
@@ -65,8 +66,13 @@ export async function handleSetup(interaction: ChatInputCommandInteraction) {
 
   } else if (name.includes('команды') || name.includes('команд')) {
     cfg.commandsChannelId = channel.id;
-    await textChannel.send({ embeds: [new EmbedBuilder().setTitle('🤖 Команды').setDescription('`/музыка` · `/скип` · `/стоп` · `/очередь`\n`/анон` · `/стата` · `/ролл` · `/шар` · `/аватар`').setColor(0x5865f2)] });
+    await textChannel.send({ embeds: [new EmbedBuilder().setTitle('🤖 Команды').setDescription('`/музыка` · `/скип` · `/стоп` · `/очередь`\n`/анон` · `/стата` · `/ролл` · `/аватар`').setColor(0x5865f2)] });
     reply = `✅ Канал <#${channel.id}> настроен как **команды**.`;
+
+  } else if (name.includes('игр')) {
+    cfg.gamesChannelId = channel.id;
+    await textChannel.send({ embeds: [new EmbedBuilder().setTitle('🎲 Игры').setDescription('Используй здесь игровые команды: `/ролл`, `/баланс`, `/охота`, `/рулетка`, `/дуэль`, `/виселица`, `/квиз`, `/стата`').setColor(0x9b59b6)] });
+    reply = `✅ Канал <#${channel.id}> настроен как **игры**.`;
 
   } else if (name.includes('музыка') && fetched.type === ChannelType.GuildText) {
     cfg.musicChannelId = channel.id;

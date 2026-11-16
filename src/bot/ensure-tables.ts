@@ -48,9 +48,11 @@ export async function ensureTables() {
         category_id TEXT,
         welcome_channel_id TEXT,
         commands_channel_id TEXT,
+        games_channel_id TEXT,
         music_channel_id TEXT
       )
     `);
+    await db.execute(sql`ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS games_channel_id TEXT`);
 
     console.log('[db] ✅ Tables ensured.');
   } catch (error) {

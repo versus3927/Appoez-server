@@ -24,5 +24,6 @@ export const guildConfigs = pgTable("guild_configs", {
   categoryId: text("category_id"),
   welcomeChannelId: text("welcome_channel_id"),
   commandsChannelId: text("commands_channel_id"),
+  gamesChannelId: text("games_channel_id"),
   musicChannelId: text("music_channel_id"),
 });
