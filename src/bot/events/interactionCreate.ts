@@ -13,7 +13,7 @@ import { db } from '@/db';
 import { privateRooms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { handleMute, handleDelete, handleStats, handleBan, handleUnban, handleGiveCoins, handleTakeCoins } from '../commands/handlers';
-import { handleAnonymousSlash, handleAvatar, handleRoll, postAnonymousMessage } from '../commands/fun';
+import { handleAnonymousSlash, handleAvatar, handle8Ball, handleRoll, postAnonymousMessage } from '../commands/fun';
 import { handlePlay, handleQueue, handleSkip, handleStop } from '../commands/music';
 import { handleSetup } from '../commands/setup';
 import { handleBalance, handleTopCoins, handleHunt, handleRoulette, handleDuel, handleHangman, handleQuiz } from '../commands/games';
@@ -46,7 +46,7 @@ export async function handleInteraction(interaction: Interaction) {
     }
 
     const musicCommands = ['музыка', 'скип', 'стоп', 'очередь'];
-    const gameCommands = ['ролл', 'аватар', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
+    const gameCommands = ['ролл', 'шар', 'аватар', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
     if ((musicCommands.includes(commandName) || gameCommands.includes(commandName)) && interaction.guild) {
       let config = null;
       try {
@@ -78,7 +78,7 @@ export async function handleInteraction(interaction: Interaction) {
 
     // For all other commands, defer reply to prevent "Application did not respond"
     // Non-game commands get ephemeral errors; game/fun commands are public
-    const publicCommands = ['ролл', 'аватар', 'музыка', 'скип', 'стоп', 'очередь', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
+    const publicCommands = ['ролл', 'шар', 'аватар', 'музыка', 'скип', 'стоп', 'очередь', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
     const privateCommands = ['муте', 'делит', 'бан', 'анбан', 'выдать', 'забрать'];
     if (publicCommands.includes(commandName)) {
       await interaction.deferReply().catch(() => {});
@@ -99,6 +99,7 @@ export async function handleInteraction(interaction: Interaction) {
     if (commandName === 'очередь') return handleQueue(interaction);
     if (commandName === 'анон') return handleAnonymousSlash(interaction);
     if (commandName === 'ролл') return handleRoll(interaction);
+    if (commandName === 'шар') return handle8Ball(interaction);
     if (commandName === 'аватар') return handleAvatar(interaction);
     if (commandName === 'баланс') return handleBalance(interaction);
     if (commandName === 'топ-монет') return handleTopCoins(interaction);

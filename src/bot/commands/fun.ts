@@ -4,6 +4,21 @@ export async function handleRoll(interaction: ChatInputCommandInteraction) {
   await interaction.editReply(`🎲 Выпало: **${Math.floor(Math.random() * 100) + 1}**`);
 }
 
+const BALL_ANSWERS = [
+  '✅ Бесспорно', '✅ Определённо да', '✅ Никаких сомнений', '✅ Можешь быть уверен',
+  '✅ Мне кажется — да', '✅ Скорее всего', '✅ Хорошие перспективы', '✅ Да',
+  '🤔 Пока не ясно, попробуй снова', '🤔 Спроси позже', '🤔 Лучше не рассказывать',
+  '🤔 Сейчас нельзя предсказать', '🤔 Сконцентрируйся и спроси опять',
+  '❌ Даже не думай', '❌ Мой ответ — нет', '❌ Весьма сомнительно',
+  '❌ По моим данным — нет', '❌ Перспективы не очень', '❌ Нет', '❌ Точно нет',
+];
+
+export async function handle8Ball(interaction: ChatInputCommandInteraction) {
+  const question = interaction.options.getString('question', true);
+  const answer = BALL_ANSWERS[Math.floor(Math.random() * BALL_ANSWERS.length)];
+  await interaction.editReply(`🎱 **${question}**\n\n${answer}`);
+}
+
 export async function handleAvatar(interaction: ChatInputCommandInteraction) {
   const user = interaction.options.getUser('user') || interaction.user;
   await interaction.editReply({ embeds: [new EmbedBuilder().setTitle(`🖼️ ${user.username}`).setImage(user.displayAvatarURL({ size: 1024 })).setColor(0x3498db)] });

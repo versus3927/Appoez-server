@@ -33,6 +33,10 @@ const commands = [
     .addStringOption((option) => option.setName('message').setDescription('Текст анонимки').setRequired(true)),
   new SlashCommandBuilder().setName('ролл').setDescription('Бросить кубик (1-100)'),
   new SlashCommandBuilder()
+    .setName('шар')
+    .setDescription('Магический шар 🎱')
+    .addStringOption((option) => option.setName('question').setDescription('Твой вопрос').setRequired(true)),
+  new SlashCommandBuilder()
     .setName('аватар')
     .setDescription('Показать аватарку пользователя')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(false)),
