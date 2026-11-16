@@ -10,8 +10,7 @@ const commands = [
     .setDescription('Замутить пользователя')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(true))
     .addStringOption((option) => option.setName('duration').setDescription('Длительность (10m, 1h)').setRequired(true))
-    .addStringOption((option) => option.setName('reason').setDescription('Причина').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+    .addStringOption((option) => option.setName('reason').setDescription('Причина').setRequired(false)),
   new SlashCommandBuilder()
     .setName('делит')
     .setDescription('Удалить всё на сервере (Только владелец)')
@@ -34,10 +33,6 @@ const commands = [
     .addStringOption((option) => option.setName('message').setDescription('Текст анонимки').setRequired(true)),
   new SlashCommandBuilder().setName('ролл').setDescription('Бросить кубик (1-100)'),
   new SlashCommandBuilder()
-    .setName('шар')
-    .setDescription('Магический шар ответит на твой вопрос')
-    .addStringOption((option) => option.setName('question').setDescription('Твой вопрос').setRequired(true)),
-  new SlashCommandBuilder()
     .setName('аватар')
     .setDescription('Показать аватарку пользователя')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(false)),
@@ -45,13 +40,21 @@ const commands = [
     .setName('бан')
     .setDescription('Забанить пользователя на сервере')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(true))
-    .addStringOption((option) => option.setName('reason').setDescription('Причина бана').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    .addStringOption((option) => option.setName('reason').setDescription('Причина бана').setRequired(false)),
   new SlashCommandBuilder()
     .setName('анбан')
     .setDescription('Разбанить пользователя по ID')
-    .addStringOption((option) => option.setName('id').setDescription('ID пользователя').setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    .addStringOption((option) => option.setName('id').setDescription('ID пользователя').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('выдать')
+    .setDescription('Выдать монеты пользователю')
+    .addUserOption((option) => option.setName('user').setDescription('Кому').setRequired(true))
+    .addIntegerOption((option) => option.setName('amount').setDescription('Сколько монет').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('забрать')
+    .setDescription('Забрать монеты у пользователя')
+    .addUserOption((option) => option.setName('user').setDescription('У кого').setRequired(true))
+    .addIntegerOption((option) => option.setName('amount').setDescription('Сколько монет').setRequired(true)),
   new SlashCommandBuilder()
     .setName('баланс')
     .setDescription('Показать свой баланс или баланс другого пользователя')
@@ -66,7 +69,7 @@ const commands = [
     .setName('рулетка')
     .setDescription('Сыграть в рулетку')
     .addIntegerOption((option) => option.setName('amount').setDescription('Сумма ставки').setRequired(true))
-    .addStringOption((option) => option.setName('bet').setDescription('На что ставим (red, black, green)').setRequired(true).addChoices(
+    .addStringOption((option) => option.setName('bet').setDescription('На что ставим').setRequired(true).addChoices(
       { name: '🔴 Красное (x2)', value: 'red' },
       { name: '⚫ Черное (x2)', value: 'black' },
       { name: '🟢 Зеленое (x36)', value: 'green' }

@@ -112,49 +112,79 @@ export async function handleStats(interaction: ChatInputCommandInteraction) {
     }
 }
 
+async function isAdmin(interaction: ChatInputCommandInteraction): Promise<boolean> {
+    const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
+    return (member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'))) ?? false;
+}
+
 export async function handleBan(interaction: ChatInputCommandInteraction) {
+    if (!(await isAdmin(interaction))) return interaction.editReply('❌ Эта команда доступна только администраторам.');
+    
     const target = interaction.options.getMember('user') as GuildMember;
     const reason = interaction.options.getString('reason') || 'Нет причины';
-
     if (!target) return interaction.editReply('❌ Пользователь не найден.');
 
     try {
-        const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
-        const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
-        
-        if (!hasAdmin && !interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
-            return interaction.editReply('❌ У вас нет прав на бан участников!');
-        }
-
-        if (!target.bannable) {
-            return interaction.editReply('❌ Я не могу забанить этого пользователя (возможно, его роль выше моей).');
-        }
-
+        if (!target.bannable) return interaction.editReply('❌ Не могу забанить этого пользователя.');
         await target.ban({ reason });
-        await interaction.editReply(`✅ Пользователь **${target.user.username}** забанен.\nПричина: ${reason}`);
+        await interaction.editReply(`✅ **${target.user.username}** забанен. Причина: ${reason}`);
     } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error('[ban] Error:', msg);
-        await interaction.editReply(`❌ Ошибка при бане: ${msg}`);
+        console.error('[ban]', error);
+        await interaction.editReply('❌ Не удалось забанить.');
     }
 }
 
 export async function handleUnban(interaction: ChatInputCommandInteraction) {
+    if (!(await isAdmin(interaction))) return interaction.editReply('❌ Эта команда доступна только администраторам.');
+    
     const targetId = interaction.options.getString('id', true);
+    try {
+        await interaction.guild!.members.unban(targetId);
+        await interaction.editReply(`✅ Пользователь **${targetId}** разбанен.`);
+    } catch (error) {
+        console.error('[unban]', error);
+        await interaction.editReply('❌ Не удалось разбанить (проверьте ID).');
+    }
+}
+
+export async function handleGiveCoins(interaction: ChatInputCommandInteraction) {
+    if (!(await isAdmin(interaction))) return interaction.editReply('❌ Эта команда доступна только администраторам.');
+
+    const target = interaction.options.getUser('user', true);
+    const amount = interaction.options.getInteger('amount', true);
+    if (amount <= 0) return interaction.editReply('❌ Количество должно быть больше 0.');
 
     try {
-        const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
-        const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
-        
-        if (!hasAdmin && !interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
-            return interaction.editReply('❌ У вас нет прав на разбан участников!');
+        const { db, userStats } = await getDbSafe();
+        let stats = await db.query.userStats.findFirst({ where: eq(userStats.userId, target.id) });
+        if (!stats) {
+            await db.insert(userStats).values({ userId: target.id, guildId: interaction.guildId!, coins: 100 }).onConflictDoNothing();
+            stats = await db.query.userStats.findFirst({ where: eq(userStats.userId, target.id) });
         }
-
-        await interaction.guild!.members.unban(targetId);
-        await interaction.editReply(`✅ Пользователь с ID **${targetId}** разбанен.`);
+        await db.update(userStats).set({ coins: (stats?.coins ?? 0) + amount }).where(eq(userStats.userId, target.id));
+        await interaction.editReply(`✅ Выдано **${amount} 💰** пользователю <@${target.id}>. Новый баланс: **${(stats?.coins ?? 0) + amount} 💰**`);
     } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error('[unban] Error:', msg);
-        await interaction.editReply(`❌ Ошибка при разбане: ${msg} (проверьте правильность ID)`);
+        console.error('[give-coins]', error);
+        await interaction.editReply('❌ Не удалось выдать монеты.');
+    }
+}
+
+export async function handleTakeCoins(interaction: ChatInputCommandInteraction) {
+    if (!(await isAdmin(interaction))) return interaction.editReply('❌ Эта команда доступна только администраторам.');
+
+    const target = interaction.options.getUser('user', true);
+    const amount = interaction.options.getInteger('amount', true);
+    if (amount <= 0) return interaction.editReply('❌ Количество должно быть больше 0.');
+
+    try {
+        const { db, userStats } = await getDbSafe();
+        let stats = await db.query.userStats.findFirst({ where: eq(userStats.userId, target.id) });
+        if (!stats) return interaction.editReply('❌ У этого пользователя нет записи в базе.');
+        const newCoins = Math.max(0, stats.coins - amount);
+        await db.update(userStats).set({ coins: newCoins }).where(eq(userStats.userId, target.id));
+        await interaction.editReply(`✅ Забрано **${amount} 💰** у <@${target.id}>. Новый баланс: **${newCoins} 💰**`);
+    } catch (error) {
+        console.error('[take-coins]', error);
+        await interaction.editReply('❌ Не удалось забрать монеты.');
     }
 }
