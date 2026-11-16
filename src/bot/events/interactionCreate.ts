@@ -12,7 +12,7 @@ import {
 import { db } from '@/db';
 import { privateRooms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { handleMute, handleDelete, handleStats } from '../commands/handlers';
+import { handleMute, handleDelete, handleStats, handleBan, handleUnban } from '../commands/handlers';
 import { handleAnonymousSlash, handleAvatar, handle8Ball, handleRoll, postAnonymousMessage } from '../commands/fun';
 import { handlePlay, handleQueue, handleSkip, handleStop } from '../commands/music';
 import { handleSetup } from '../commands/setup';
@@ -70,7 +70,7 @@ export async function handleInteraction(interaction: Interaction) {
     // For all other commands, defer reply to prevent "Application did not respond"
     // Non-game commands get ephemeral errors; game/fun commands are public
     const publicCommands = ['ролл', 'шар', 'аватар', 'музыка', 'скип', 'стоп', 'очередь', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
-    const privateCommands = ['муте', 'делит'];
+    const privateCommands = ['муте', 'делит', 'бан', 'анбан'];
     if (publicCommands.includes(commandName)) {
       await interaction.deferReply().catch(() => {});
     } else if (privateCommands.includes(commandName)) {
@@ -79,6 +79,8 @@ export async function handleInteraction(interaction: Interaction) {
 
     if (commandName === 'муте') return handleMute(interaction);
     if (commandName === 'делит') return handleDelete(interaction);
+    if (commandName === 'бан') return handleBan(interaction);
+    if (commandName === 'анбан') return handleUnban(interaction);
     if (commandName === 'стата') return handleStats(interaction);
     if (commandName === 'музыка') return handlePlay(interaction);
     if (commandName === 'скип') return handleSkip(interaction);

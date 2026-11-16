@@ -111,3 +111,50 @@ export async function handleStats(interaction: ChatInputCommandInteraction) {
         await interaction.editReply(`❌ Не удалось получить статистику: ${msg}`).catch(() => {});
     }
 }
+
+export async function handleBan(interaction: ChatInputCommandInteraction) {
+    const target = interaction.options.getMember('user') as GuildMember;
+    const reason = interaction.options.getString('reason') || 'Нет причины';
+
+    if (!target) return interaction.editReply('❌ Пользователь не найден.');
+
+    try {
+        const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
+        const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
+        
+        if (!hasAdmin && !interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
+            return interaction.editReply('❌ У вас нет прав на бан участников!');
+        }
+
+        if (!target.bannable) {
+            return interaction.editReply('❌ Я не могу забанить этого пользователя (возможно, его роль выше моей).');
+        }
+
+        await target.ban({ reason });
+        await interaction.editReply(`✅ Пользователь **${target.user.username}** забанен.\nПричина: ${reason}`);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error('[ban] Error:', msg);
+        await interaction.editReply(`❌ Ошибка при бане: ${msg}`);
+    }
+}
+
+export async function handleUnban(interaction: ChatInputCommandInteraction) {
+    const targetId = interaction.options.getString('id', true);
+
+    try {
+        const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
+        const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
+        
+        if (!hasAdmin && !interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
+            return interaction.editReply('❌ У вас нет прав на разбан участников!');
+        }
+
+        await interaction.guild!.members.unban(targetId);
+        await interaction.editReply(`✅ Пользователь с ID **${targetId}** разбанен.`);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error('[unban] Error:', msg);
+        await interaction.editReply(`❌ Ошибка при разбане: ${msg} (проверьте правильность ID)`);
+    }
+}

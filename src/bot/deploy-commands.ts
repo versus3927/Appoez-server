@@ -42,6 +42,17 @@ const commands = [
     .setDescription('Показать аватарку пользователя')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(false)),
   new SlashCommandBuilder()
+    .setName('бан')
+    .setDescription('Забанить пользователя на сервере')
+    .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(true))
+    .addStringOption((option) => option.setName('reason').setDescription('Причина бана').setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+  new SlashCommandBuilder()
+    .setName('анбан')
+    .setDescription('Разбанить пользователя по ID')
+    .addStringOption((option) => option.setName('id').setDescription('ID пользователя').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+  new SlashCommandBuilder()
     .setName('баланс')
     .setDescription('Показать свой баланс или баланс другого пользователя')
     .addUserOption((option) => option.setName('user').setDescription('Пользователь').setRequired(false)),
