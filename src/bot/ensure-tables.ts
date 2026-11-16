@@ -1,5 +1,6 @@
 /**
  * Ensures database tables exist by running raw CREATE TABLE IF NOT EXISTS.
+ * Also adds missing columns for schema updates.
  * This avoids the need for drizzle-kit push on Railway.
  */
 export async function ensureTables() {
@@ -17,9 +18,15 @@ export async function ensureTables() {
         message_count INTEGER NOT NULL DEFAULT 0,
         voice_minutes INTEGER NOT NULL DEFAULT 0,
         joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        last_voice_join TIMESTAMP
+        last_voice_join TIMESTAMP,
+        coins INTEGER NOT NULL DEFAULT 0,
+        last_hunt TIMESTAMP
       )
     `);
+
+    // Add missing columns if table already existed without them
+    await db.execute(sql`ALTER TABLE user_stats ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE user_stats ADD COLUMN IF NOT EXISTS last_hunt TIMESTAMP`);
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS private_rooms (

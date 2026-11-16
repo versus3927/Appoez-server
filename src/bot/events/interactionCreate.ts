@@ -68,10 +68,13 @@ export async function handleInteraction(interaction: Interaction) {
     }
 
     // For all other commands, defer reply to prevent "Application did not respond"
-    if (['ролл', 'шар', 'аватар', 'стата', 'муте', 'делит', 'музыка', 'скип', 'стоп', 'очередь', 'анон', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз'].includes(commandName)) {
-      if (commandName !== 'анон') { // handled separately or already deferred
-        await interaction.deferReply().catch(() => {});
-      }
+    // Non-game commands get ephemeral errors; game/fun commands are public
+    const publicCommands = ['ролл', 'шар', 'аватар', 'музыка', 'скип', 'стоп', 'очередь', 'баланс', 'топ-монет', 'охота', 'рулетка', 'дуэль', 'виселица', 'квиз', 'стата'];
+    const privateCommands = ['муте', 'делит'];
+    if (publicCommands.includes(commandName)) {
+      await interaction.deferReply().catch(() => {});
+    } else if (privateCommands.includes(commandName)) {
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     if (commandName === 'муте') return handleMute(interaction);

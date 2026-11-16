@@ -30,7 +30,8 @@ export async function handleBalance(interaction: ChatInputCommandInteraction) {
       .setColor(0xf1c40f);
     return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
+    console.error('[balance]', e);
+    return interaction.editReply({ content: '❌ Не удалось загрузить баланс. Попробуй позже.' });
   }
 }
 
@@ -49,7 +50,8 @@ export async function handleTopCoins(interaction: ChatInputCommandInteraction) {
       .setColor(0xf1c40f);
     return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
+    console.error('[top-coins]', e);
+    return interaction.editReply({ content: '❌ Не удалось загрузить рейтинг. Попробуй позже.' });
   }
 }
 
@@ -83,7 +85,8 @@ export async function handleHunt(interaction: ChatInputCommandInteraction) {
     const embed = new EmbedBuilder().setTitle('🏹 Охота').setDescription(desc).setColor(0x2ecc71);
     return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
+    console.error('[hunt]', e);
+    return interaction.editReply({ content: '❌ Не удалось сходить на охоту. Попробуй позже.' });
   }
 }
 
@@ -112,7 +115,8 @@ export async function handleRoulette(interaction: ChatInputCommandInteraction) {
       .setColor(win ? 0x2ecc71 : 0xe74c3c);
     return interaction.editReply({ embeds: [embed] });
   } catch (e) {
-    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
+    console.error('[roulette]', e);
+    return interaction.editReply({ content: '❌ Ошибка рулетки. Попробуй позже.' });
   }
 }
 
@@ -177,7 +181,7 @@ export async function handleDuel(interaction: ChatInputCommandInteraction) {
       } catch {}
       await interaction.editReply({ content: `🏆 <@${winnerId}> побеждает и получает **50 💰**!`, components: [] });
     } else await interaction.editReply({ content: '🤝 Ничья!', components: [] });
-  } catch { await interaction.editReply({ content: '❌ Произошла ошибка.', components: [] }).catch(() => {}); }
+  } catch (e) { console.error('[duel]', e); await interaction.editReply({ content: '❌ Произошла ошибка. Попробуй позже.', components: [] }).catch(() => {}); }
 }
 
 const WORDS = ["ПРОГРАММИСТ", "СЕРВЕР", "ДИСКОРД", "РУЛЕТКА", "ЭКОНОМИКА", "МОНЕТА", "АДМИН", "МУЗЫКА", "КОМПЬЮТЕР", "ИНТЕРНЕТ", "ПЛАНЕТА", "КОСМОС", "РОБОТ", "МАТРИЦА", "ГАЛАКТИКА"];
@@ -194,7 +198,8 @@ export async function handleHangman(interaction: ChatInputCommandInteraction) {
     if (mode === 'solo') await hangmanSolo(interaction, bet);
     else await hangmanDuo(interaction, bet);
   } catch (e) {
-    return interaction.editReply({ content: `❌ ${e instanceof Error ? e.message : e}` });
+    console.error('[hangman]', e);
+    return interaction.editReply({ content: '❌ Не удалось начать игру. Попробуй позже.' });
   }
 }
 
