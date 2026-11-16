@@ -8,11 +8,12 @@ export async function handle8Ball(interaction: ChatInputCommandInteraction) {
   const question = interaction.options.getString('question', true);
   
   try {
-    const prompt = `Ответь на вопрос пользователя кратко и остроумно, как мистический оракул или магический шар. Вопрос: "${question}"`;
-    const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=qwen&system=You%20are%20a%20mystical%20russian%20oracle&private=true`);
+    const system = 'Ты — мистический русский оракул. Отвечай кратко (1-2 предложения), остроумно и загадочно. Отвечай только на русском.';
+    const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(question)}?system=${encodeURIComponent(system)}&private=true`);
     const text = await res.text();
+    const clean = text.trim().slice(0, 500);
     
-    await interaction.editReply(`🎱 **${question}**\n\n🔮 ${text.trim()}`);
+    await interaction.editReply(`🎱 **${question}**\n\n🔮 ${clean}`);
   } catch (error) {
     console.error('[8ball]', error);
     await interaction.editReply(`🎱 **${question}**\n\n🤔 Магический туман скрывает ответ. Попробуй позже.`);
