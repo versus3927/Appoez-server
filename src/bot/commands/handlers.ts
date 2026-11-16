@@ -5,24 +5,33 @@ import {
     EmbedBuilder,
 } from 'discord.js';
 import ms, { StringValue } from 'ms';
-import { db } from '@/db';
-import { userStats } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+async function getDbSafe() {
+  const { getDb } = await import('@/db');
+  const { userStats } = await import('@/db/schema');
+  const database = getDb();
+  if (!database) throw new Error('БД не подключена.');
+  return { db: database, userStats };
+}
+
 export async function handleMute(interaction: ChatInputCommandInteraction) {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
-        return interaction.reply({ content: '❌ У вас нет прав!', ephemeral: true });
-    }
-
     const target = interaction.options.getMember('user') as GuildMember;
-    const duration = interaction.options.getString('duration') as StringValue;
-    const reason = interaction.options.getString('reason') || 'Нет причины';
-
     if (!target) return interaction.reply({ content: '❌ Пользователь не найден.', ephemeral: true });
 
-    await interaction.deferReply();
-
+    await interaction.deferReply({ ephemeral: true });
+    
     try {
+        const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
+        const hasAdmin = member?.permissions.has(PermissionFlagsBits.Administrator) || member?.roles.cache.some(r => r.name.toLowerCase().includes('administrator'));
+        
+        if (!hasAdmin && !interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+            return interaction.editReply('❌ У вас нет прав!');
+        }
+
+        const duration = interaction.options.getString('duration') as StringValue;
+        const reason = interaction.options.getString('reason') || 'Нет причины';
+
         const msDuration = ms(duration || '10m');
         await target.timeout(msDuration, reason);
         await interaction.editReply(
@@ -55,7 +64,6 @@ export async function handleDelete(interaction: ChatInputCommandInteraction) {
             }
         }
 
-        // Can't editReply if the channel was deleted, so just catch silently
         await interaction.editReply('✅ Все каналы и роли удалены.').catch(() => {});
     } catch (error) {
         console.error('[delete] Error:', error);
@@ -64,11 +72,11 @@ export async function handleDelete(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleStats(interaction: ChatInputCommandInteraction) {
-    // deferReply immediately — prevents "Application did not respond"
     await interaction.deferReply();
 
     try {
         const target = interaction.options.getUser('user') || interaction.user;
+        const { db, userStats } = await getDbSafe();
 
         let stats = null;
         try {
@@ -86,7 +94,7 @@ export async function handleStats(interaction: ChatInputCommandInteraction) {
             const now = new Date();
             daysOnServer = Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24));
         } catch {
-            // Member might not be in the guild
+            // ignore
         }
 
         const embed = new EmbedBuilder()
@@ -95,6 +103,7 @@ export async function handleStats(interaction: ChatInputCommandInteraction) {
                 { name: '📅 На сервере', value: `${daysOnServer} дней`, inline: true },
                 { name: '💬 Сообщений', value: `${stats?.messageCount ?? 0}`, inline: true },
                 { name: '🎙️ В войсе', value: `${stats?.voiceMinutes ?? 0} мин`, inline: true },
+                { name: '💰 Баланс', value: `${stats?.coins ?? 100} монет`, inline: true },
             )
             .setColor(0x2ECC71)
             .setThumbnail(target.displayAvatarURL({ size: 256 }))
