@@ -11,8 +11,15 @@ export async function handle8Ball(interaction: ChatInputCommandInteraction) {
     const system = 'Ты — мистический русский оракул. Отвечай кратко (1-2 предложения), остроумно и загадочно. Отвечай только на русском.';
     const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(question)}?system=${encodeURIComponent(system)}&private=true`);
     const text = await res.text();
-    const clean = text.trim().slice(0, 500);
     
+    // Проверяем что ответ не ошибка API
+    if (!res.ok || text.includes('"error"') || text.includes('NOT_FOUND') || text.includes('Free limit') || text.trim().length === 0) {
+      console.error('[8ball] API error:', text.slice(0, 200));
+      await interaction.editReply(`🎱 **${question}**\n\n🤔 Оракул задумался… Попробуй через минуту.`);
+      return;
+    }
+    
+    const clean = text.trim().slice(0, 500);
     await interaction.editReply(`🎱 **${question}**\n\n🔮 ${clean}`);
   } catch (error) {
     console.error('[8ball]', error);
